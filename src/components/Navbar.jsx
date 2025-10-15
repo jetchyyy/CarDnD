@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { Car, Menu, X, User, LogOut, Settings, LayoutDashboard, PlusCircle } from 'lucide-react';
+import { Car, Menu, X, User, LogOut, Settings, LayoutDashboard, PlusCircle, Calendar } from 'lucide-react';
 import { useAuth } from '../context/Authcontext';
 
 const Navbar = () => {
@@ -88,6 +88,15 @@ const Navbar = () => {
                       <User className="w-4 h-4 text-gray-600" />
                       <span className="text-gray-700">Profile</span>
                     </Link>
+
+                    <Link 
+                      to="/my-bookings" 
+                      onClick={() => setIsUserMenuOpen(false)}
+                      className="w-full text-left px-4 py-2 hover:bg-gray-100 flex items-center space-x-3"
+                    >
+                      <Calendar className="w-4 h-4 text-gray-600" />
+                      <span className="text-gray-700">My Bookings</span>
+                    </Link>
                     
                     {user.role === 'host' && (
                       <>
@@ -130,11 +139,11 @@ const Navbar = () => {
                   Sign In
                 </Link>
                 <Link 
-  to="/signup"
-  className="bg-blue-600 hover:bg-blue-700 text-white font-semibold px-6 py-2 rounded-lg transition-colors"
->
-  Sign Up
-</Link>
+                  to="/signup"
+                  className="bg-blue-600 hover:bg-blue-700 text-white font-semibold px-6 py-2 rounded-lg transition-colors"
+                >
+                  Sign Up
+                </Link>
               </>
             )}
           </div>
@@ -181,6 +190,15 @@ const Navbar = () => {
                     <User className="w-4 h-4" />
                     <span>Profile</span>
                   </Link>
+
+                  <Link 
+                    to="/my-bookings" 
+                    onClick={toggleMenu}
+                    className="text-gray-700 hover:text-blue-600 font-medium text-left flex items-center space-x-2"
+                  >
+                    <Calendar className="w-4 h-4" />
+                    <span>My Bookings</span>
+                  </Link>
                   
                   {user.role === 'host' && (
                     <>
@@ -223,13 +241,13 @@ const Navbar = () => {
                   >
                     Sign In
                   </Link>
-              <Link 
-  to="/signup"
-  onClick={toggleMenu}
-  className="bg-blue-600 hover:bg-blue-700 text-white font-semibold px-6 py-2 rounded-lg w-full text-center"
->
-  Sign Up
-</Link>
+                  <Link 
+                    to="/signup"
+                    onClick={toggleMenu}
+                    className="bg-blue-600 hover:bg-blue-700 text-white font-semibold px-6 py-2 rounded-lg w-full text-center"
+                  >
+                    Sign Up
+                  </Link>
                 </>
               )}
             </div>
