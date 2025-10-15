@@ -1,19 +1,23 @@
 import { useState } from 'react';
 import { useNavigate, useLocation, Link } from 'react-router-dom';
-import { Mail, Lock, Eye, EyeOff, Car, AlertCircle } from 'lucide-react';
+import { Mail, Lock, Eye, EyeOff, Car, AlertCircle, User } from 'lucide-react';
 import { useAuth } from '../context/Authcontext';
 
-const Login = () => {
+const SignUp = () => {
   const [showPassword, setShowPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [formData, setFormData] = useState({
+    fullName: '',
     email: '',
-    password: ''
+    password: '',
+    confirmPassword: '',
+    role: 'guest'
   });
   const [errors, setErrors] = useState({});
   const [loading, setLoading] = useState(false);
   const [serverError, setServerError] = useState('');
 
-  const { login, googleSignIn } = useAuth();
+  const { signup, googleSignIn } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
 
@@ -32,6 +36,13 @@ const Login = () => {
   const validateForm = () => {
     const newErrors = {};
 
+    // Full name validation
+    if (!formData.fullName) {
+      newErrors.fullName = 'Full name is required';
+    } else if (formData.fullName.length < 2) {
+      newErrors.fullName = 'Name must be at least 2 characters';
+    }
+
     // Email validation
     if (!formData.email) {
       newErrors.email = 'Email is required';
@@ -44,6 +55,15 @@ const Login = () => {
       newErrors.password = 'Password is required';
     } else if (formData.password.length < 6) {
       newErrors.password = 'Password must be at least 6 characters';
+    } else if (!/(?=.*[a-z])(?=.*[A-Z])/.test(formData.password)) {
+      newErrors.password = 'Password must contain uppercase and lowercase letters';
+    }
+
+    // Confirm password validation
+    if (!formData.confirmPassword) {
+      newErrors.confirmPassword = 'Please confirm your password';
+    } else if (formData.password !== formData.confirmPassword) {
+      newErrors.confirmPassword = 'Passwords do not match';
     }
 
     setErrors(newErrors);
@@ -60,7 +80,7 @@ const Login = () => {
     setLoading(true);
     setServerError('');
 
-    const result = await login(formData.email, formData.password);
+    const result = await signup(formData.email, formData.password, formData.fullName, formData.role);
     
     setLoading(false);
 
@@ -72,25 +92,25 @@ const Login = () => {
       // Handle Firebase error messages
       let errorMessage = 'An error occurred. Please try again.';
       
-      if (result.error.includes('user-not-found')) {
-        errorMessage = 'No account found with this email.';
-      } else if (result.error.includes('wrong-password')) {
-        errorMessage = 'Incorrect password.';
-      } else if (result.error.includes('invalid-credential')) {
-        errorMessage = 'Invalid email or password.';
-      } else if (result.error.includes('too-many-requests')) {
-        errorMessage = 'Too many failed attempts. Please try again later.';
+      if (result.error.includes('email-already-in-use')) {
+        errorMessage = 'An account with this email already exists.';
+      } else if (result.error.includes('weak-password')) {
+        errorMessage = 'Password is too weak. Please use a stronger password.';
+      } else if (result.error.includes('invalid-email')) {
+        errorMessage = 'Invalid email address.';
+      } else if (result.error.includes('network-request-failed')) {
+        errorMessage = 'Network error. Please check your connection.';
       }
       
       setServerError(errorMessage);
     }
   };
 
-  const handleGoogleSignIn = async () => {
+  const handleGoogleSignUp = async () => {
     setLoading(true);
     setServerError('');
 
-    const result = await googleSignIn('guest');
+    const result = await googleSignIn(formData.role);
     
     setLoading(false);
 
@@ -99,12 +119,14 @@ const Login = () => {
       const returnTo = location.state?.returnTo || '/';
       navigate(returnTo);
     } else {
-      let errorMessage = 'Failed to sign in with Google. Please try again.';
+      let errorMessage = 'Failed to sign up with Google. Please try again.';
       
       if (result.error.includes('popup-closed')) {
-        errorMessage = 'Sign in was cancelled.';
+        errorMessage = 'Sign up was cancelled.';
       } else if (result.error.includes('popup-blocked')) {
         errorMessage = 'Popup was blocked. Please allow popups for this site.';
+      } else if (result.error.includes('account-exists-with-different-credential')) {
+        errorMessage = 'An account already exists with this email.';
       }
       
       setServerError(errorMessage);
@@ -119,8 +141,8 @@ const Login = () => {
           <div className="inline-flex items-center justify-center w-16 h-16 bg-blue-600 rounded-full mb-4">
             <Car className="w-8 h-8 text-white" />
           </div>
-          <h1 className="text-3xl font-bold text-gray-900 mb-2">Welcome Back</h1>
-          <p className="text-gray-600">Sign in to continue to CarDnD</p>
+          <h1 className="text-3xl font-bold text-gray-900 mb-2">Create Account</h1>
+          <p className="text-gray-600">Join CarDnD and start your journey</p>
         </div>
 
         {/* Main Form Card */}
@@ -133,7 +155,32 @@ const Login = () => {
             </div>
           )}
 
-          <form onSubmit={handleSubmit} className="space-y-6">
+          <form onSubmit={handleSubmit} className="space-y-5">
+            {/* Full Name Field */}
+            <div>
+              <label htmlFor="fullName" className="block text-sm font-medium text-gray-700 mb-2">
+                Full Name
+              </label>
+              <div className="relative">
+                <User className="absolute left-3 top-3.5 w-5 h-5 text-gray-400" />
+                <input
+                  type="text"
+                  id="fullName"
+                  name="fullName"
+                  value={formData.fullName}
+                  onChange={handleInputChange}
+                  className={`w-full pl-10 pr-4 py-3 border ${errors.fullName ? 'border-red-500' : 'border-gray-300'} rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-colors text-gray-900`}
+                  placeholder="John Doe"
+                />
+              </div>
+              {errors.fullName && (
+                <div className="flex items-center mt-2 text-red-600 text-sm">
+                  <AlertCircle className="w-4 h-4 mr-1" />
+                  {errors.fullName}
+                </div>
+              )}
+            </div>
+
             {/* Email Field */}
             <div>
               <label htmlFor="email" className="block text-sm font-medium text-gray-700 mb-2">
@@ -191,14 +238,73 @@ const Login = () => {
               )}
             </div>
 
-            {/* Forgot Password Link */}
-            <div className="flex items-center justify-end">
-              <button
-                type="button"
-                className="text-sm text-blue-600 hover:text-blue-700 font-medium"
-              >
-                Forgot password?
-              </button>
+            {/* Confirm Password Field */}
+            <div>
+              <label htmlFor="confirmPassword" className="block text-sm font-medium text-gray-700 mb-2">
+                Confirm Password
+              </label>
+              <div className="relative">
+                <Lock className="absolute left-3 top-3.5 w-5 h-5 text-gray-400" />
+                <input
+                  type={showConfirmPassword ? 'text' : 'password'}
+                  id="confirmPassword"
+                  name="confirmPassword"
+                  value={formData.confirmPassword}
+                  onChange={handleInputChange}
+                  className={`w-full pl-10 pr-12 py-3 border ${errors.confirmPassword ? 'border-red-500' : 'border-gray-300'} rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-colors text-gray-900`}
+                  placeholder="••••••••"
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+                  className="absolute right-3 top-3.5 text-gray-400 hover:text-gray-600"
+                >
+                  {showConfirmPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
+                </button>
+              </div>
+              {errors.confirmPassword && (
+                <div className="flex items-center mt-2 text-red-600 text-sm">
+                  <AlertCircle className="w-4 h-4 mr-1" />
+                  {errors.confirmPassword}
+                </div>
+              )}
+            </div>
+
+            {/* Role Selection */}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-3">
+                I want to
+              </label>
+              <div className="grid grid-cols-2 gap-3">
+                <button
+                  type="button"
+                  onClick={() => setFormData(prev => ({ ...prev, role: 'guest' }))}
+                  className={`p-4 border-2 rounded-lg transition-all ${
+                    formData.role === 'guest'
+                      ? 'border-blue-600 bg-blue-50'
+                      : 'border-gray-300 hover:border-gray-400'
+                  }`}
+                >
+                  <div className="text-center">
+                    <div className="text-lg font-semibold text-gray-900">Rent Cars</div>
+                    <div className="text-xs text-gray-600 mt-1">As a Guest</div>
+                  </div>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setFormData(prev => ({ ...prev, role: 'host' }))}
+                  className={`p-4 border-2 rounded-lg transition-all ${
+                    formData.role === 'host'
+                      ? 'border-blue-600 bg-blue-50'
+                      : 'border-gray-300 hover:border-gray-400'
+                  }`}
+                >
+                  <div className="text-center">
+                    <div className="text-lg font-semibold text-gray-900">List Cars</div>
+                    <div className="text-xs text-gray-600 mt-1">As a Host</div>
+                  </div>
+                </button>
+              </div>
             </div>
 
             {/* Submit Button */}
@@ -210,10 +316,10 @@ const Login = () => {
               {loading ? (
                 <div className="flex items-center">
                   <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin mr-2"></div>
-                  Processing...
+                  Creating Account...
                 </div>
               ) : (
-                'Sign In'
+                'Create Account'
               )}
             </button>
 
@@ -227,10 +333,10 @@ const Login = () => {
               </div>
             </div>
 
-            {/* Google Sign In */}
+            {/* Google Sign Up */}
             <button
               type="button"
-              onClick={handleGoogleSignIn}
+              onClick={handleGoogleSignUp}
               disabled={loading}
               className="w-full bg-white border border-gray-300 hover:bg-gray-50 disabled:bg-gray-100 text-gray-700 font-medium py-3 rounded-lg transition duration-200 flex items-center justify-center"
             >
@@ -252,20 +358,28 @@ const Login = () => {
                   d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"
                 />
               </svg>
-              Sign in with Google
+              Sign up with Google
             </button>
+
+            {/* Terms and Privacy */}
+            <p className="text-xs text-gray-600 text-center">
+              By signing up, you agree to our{' '}
+              <a href="#" className="text-blue-600 hover:underline">Terms of Service</a>
+              {' '}and{' '}
+              <a href="#" className="text-blue-600 hover:underline">Privacy Policy</a>
+            </p>
           </form>
         </div>
 
-        {/* Toggle to Signup */}
+        {/* Toggle to Login */}
         <div className="mt-6 text-center">
           <p className="text-gray-600">
-            Don't have an account?{' '}
+            Already have an account?{' '}
             <Link
-              to="/signup"
+              to="/login"
               className="text-blue-600 hover:text-blue-700 font-semibold"
             >
-              Sign up
+              Sign in
             </Link>
           </p>
         </div>
@@ -274,4 +388,4 @@ const Login = () => {
   );
 };
 
-export default Login;
+export default SignUp;

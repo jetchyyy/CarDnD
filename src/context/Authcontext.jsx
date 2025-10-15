@@ -1,4 +1,14 @@
 import { createContext, useState, useContext, useEffect } from 'react';
+import { 
+  signInWithEmailAndPassword,
+  createUserWithEmailAndPassword,
+  signOut,
+  signInWithPopup,
+  GoogleAuthProvider,
+  onAuthStateChanged
+} from 'firebase/auth';
+import { doc, getDoc, setDoc, updateDoc } from 'firebase/firestore';
+import { auth, db } from '../firebase/firebase';
 
 const AuthContext = createContext();
 
@@ -15,37 +25,61 @@ export const AuthProvider = ({ children }) => {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    // Check if user is logged in (from Firebase or localStorage equivalent)
-    const checkAuth = async () => {
-      try {
-        // Simulate checking auth state
-        // Replace with actual Firebase auth state listener
-        const storedUser = sessionStorage.getItem('carbnb_user');
-        if (storedUser) {
-          setUser(JSON.parse(storedUser));
+    // Listen to Firebase auth state changes
+    const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
+      if (firebaseUser) {
+        try {
+          // Fetch user document from Firestore
+          const userDoc = await getDoc(doc(db, 'users', firebaseUser.uid));
+          if (userDoc.exists()) {
+            setUser(userDoc.data());
+          } else {
+            // If user document doesn't exist, create a basic one
+            const newUser = createUserDocument(
+              firebaseUser.uid,
+              firebaseUser.email,
+              firebaseUser.displayName || 'User',
+              firebaseUser.photoURL,
+              'guest'
+            );
+            await setDoc(doc(db, 'users', firebaseUser.uid), newUser);
+            setUser(newUser);
+          }
+        } catch (error) {
+          console.error('Error fetching user document:', error);
+          setUser(null);
         }
-      } catch (error) {
-        console.error('Auth check error:', error);
-      } finally {
-        setLoading(false);
+      } else {
+        setUser(null);
       }
-    };
+      setLoading(false);
+    });
 
-    checkAuth();
+    // Cleanup subscription
+    return () => unsubscribe();
   }, []);
+
+  // Helper function to create user document structure
+  const createUserDocument = (uid, email, name, photoUrl = null, role = 'guest') => {
+    return {
+      userId: uid,
+      name,
+      email,
+      role, // 'host' or 'guest'
+      photoUrl,
+      createdAt: new Date().toISOString()
+    };
+  };
 
   const login = async (email, password) => {
     try {
-      // Simulate login - replace with actual Firebase auth
-      const mockUser = {
-        uid: '123',
-        email,
-        displayName: 'John Doe',
-        photoURL: null
-      };
+      const userCredential = await signInWithEmailAndPassword(auth, email, password);
+      const userDoc = await getDoc(doc(db, 'users', userCredential.user.uid));
       
-      setUser(mockUser);
-      sessionStorage.setItem('carbnb_user', JSON.stringify(mockUser));
+      if (userDoc.exists()) {
+        setUser(userDoc.data());
+      }
+      
       return { success: true };
     } catch (error) {
       console.error('Login error:', error);
@@ -53,18 +87,22 @@ export const AuthProvider = ({ children }) => {
     }
   };
 
-  const signup = async (email, password, fullName) => {
+  const signup = async (email, password, fullName, role = 'guest') => {
     try {
-      // Simulate signup - replace with actual Firebase auth
-      const mockUser = {
-        uid: Date.now().toString(),
-        email,
-        displayName: fullName,
-        photoURL: null
-      };
+      const userCredential = await createUserWithEmailAndPassword(auth, email, password);
       
-      setUser(mockUser);
-      sessionStorage.setItem('carbnb_user', JSON.stringify(mockUser));
+      // Create user document in Firestore
+      const newUser = createUserDocument(
+        userCredential.user.uid,
+        email,
+        fullName,
+        null,
+        role
+      );
+      
+      await setDoc(doc(db, 'users', userCredential.user.uid), newUser);
+      setUser(newUser);
+      
       return { success: true };
     } catch (error) {
       console.error('Signup error:', error);
@@ -74,9 +112,8 @@ export const AuthProvider = ({ children }) => {
 
   const logout = async () => {
     try {
-      // Replace with actual Firebase signOut
+      await signOut(auth);
       setUser(null);
-      sessionStorage.removeItem('carbnb_user');
       return { success: true };
     } catch (error) {
       console.error('Logout error:', error);
@@ -84,21 +121,66 @@ export const AuthProvider = ({ children }) => {
     }
   };
 
-  const googleSignIn = async () => {
+  const googleSignIn = async (role = 'guest') => {
     try {
-      // Replace with actual Firebase Google auth
-      const mockUser = {
-        uid: Date.now().toString(),
-        email: 'user@gmail.com',
-        displayName: 'Google User',
-        photoURL: null
-      };
+      const provider = new GoogleAuthProvider();
+      const result = await signInWithPopup(auth, provider);
       
-      setUser(mockUser);
-      sessionStorage.setItem('carbnb_user', JSON.stringify(mockUser));
+      // Check if user document exists
+      const userDoc = await getDoc(doc(db, 'users', result.user.uid));
+      
+      if (!userDoc.exists()) {
+        // Create new user document for first-time Google sign-in
+        const newUser = createUserDocument(
+          result.user.uid,
+          result.user.email,
+          result.user.displayName,
+          result.user.photoURL,
+          role
+        );
+        await setDoc(doc(db, 'users', result.user.uid), newUser);
+        setUser(newUser);
+      } else {
+        setUser(userDoc.data());
+      }
+      
       return { success: true };
     } catch (error) {
       console.error('Google sign in error:', error);
+      return { success: false, error: error.message };
+    }
+  };
+
+  const switchRole = async (newRole) => {
+    try {
+      if (!user) return { success: false, error: 'No user logged in' };
+      
+      // Update role in Firestore
+      await updateDoc(doc(db, 'users', user.userId), { 
+        role: newRole 
+      });
+      
+      const updatedUser = { ...user, role: newRole };
+      setUser(updatedUser);
+      return { success: true };
+    } catch (error) {
+      console.error('Switch role error:', error);
+      return { success: false, error: error.message };
+    }
+  };
+
+  const updateProfile = async (updates) => {
+    try {
+      if (!user) return { success: false, error: 'No user logged in' };
+      
+      // Update user document in Firestore
+      await updateDoc(doc(db, 'users', user.userId), updates);
+      
+      const updatedUser = { ...user, ...updates };
+      setUser(updatedUser);
+      return { success: true };
+    } catch (error) {
+      console.error('Update profile error:', error);
       return { success: false, error: error.message };
     }
   };
@@ -109,7 +191,9 @@ export const AuthProvider = ({ children }) => {
     login,
     signup,
     logout,
-    googleSignIn
+    googleSignIn,
+    switchRole,
+    updateProfile
   };
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

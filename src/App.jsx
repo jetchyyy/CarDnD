@@ -14,6 +14,7 @@ import HostDashboard from './pages/HostDashboard';
 import AddCar from './pages/AddCar';
 import AddMotorcycle from './pages/AddMotorcycle';
 import Profile from './pages/Profile';
+import SignUp from './pages/SignUp';
 
 function App() {
   return (
@@ -25,6 +26,7 @@ function App() {
             <Routes>
               <Route path="/" element={<Home />} />
               <Route path="/login" element={<Login />} />
+              <Route path="/signup" element={<SignUp />} />
               <Route path="/vehicles" element={<CarList />} />
               <Route path="/vehicles/:id" element={<CarDetails />} />
               <Route path="/host/dashboard" element={<HostDashboard />} />
