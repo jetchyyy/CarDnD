@@ -1,7 +1,9 @@
 import { useState } from 'react';
+import { useNavigate, Link } from 'react-router-dom';
 import { Search, Car, Shield, DollarSign, Clock, MapPin, Calendar } from 'lucide-react';
 
 const Home = () => {
+  const navigate = useNavigate();
   const [searchData, setSearchData] = useState({
     location: '',
     pickupDate: '',
@@ -11,8 +13,16 @@ const Home = () => {
 
   const handleSearch = (e) => {
     e.preventDefault();
-    console.log('Search data:', searchData);
-    // Navigate to car list page with search params
+    
+    // Build query params from search data
+    const params = new URLSearchParams();
+    if (searchData.location) params.append('location', searchData.location);
+    if (searchData.pickupDate) params.append('pickup', searchData.pickupDate);
+    if (searchData.returnDate) params.append('return', searchData.returnDate);
+    if (searchData.vehicleType !== 'all') params.append('type', searchData.vehicleType);
+    
+    // Navigate to vehicles page with search params
+    navigate(`/vehicles?${params.toString()}`);
   };
 
   const featuredVehicles = [
@@ -87,7 +97,7 @@ const Home = () => {
           </div>
 
           {/* Search Form */}
-          <div className="bg-white rounded-lg shadow-xl p-6 max-w-4xl mx-auto">
+          <form onSubmit={handleSearch} className="bg-white rounded-lg shadow-xl p-6 max-w-4xl mx-auto">
             <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
               <div className="relative">
                 <label className="block text-sm font-medium text-gray-700 mb-2">Location</label>
@@ -144,13 +154,13 @@ const Home = () => {
             </div>
 
             <button
-              onClick={handleSearch}
+              type="submit"
               className="mt-6 w-full bg-blue-600 hover:bg-blue-700 text-white font-semibold py-3 rounded-lg transition duration-200 flex items-center justify-center gap-2"
             >
               <Search className="w-5 h-5" />
               Search Vehicles
             </button>
-          </div>
+          </form>
         </div>
       </div>
 
@@ -176,15 +186,20 @@ const Home = () => {
           <h2 className="text-3xl font-bold text-gray-900 mb-8">Featured Vehicles</h2>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
             {featuredVehicles.map((vehicle) => (
-              <div key={vehicle.id} className="bg-white rounded-lg shadow-md overflow-hidden hover:shadow-xl transition-shadow cursor-pointer">
+              <Link 
+                key={vehicle.id} 
+                to={`/vehicles/${vehicle.id}`}
+                className="bg-white rounded-lg shadow-md overflow-hidden hover:shadow-xl transition-shadow cursor-pointer"
+              >
                 <div className="relative h-48">
                   <img
                     src={vehicle.image}
                     alt={vehicle.name}
                     className="w-full h-full object-cover"
                   />
-                  <div className="absolute top-2 right-2 bg-white px-3 py-1 rounded-full text-sm font-semibold text-gray-900">
-                    {vehicle.type === 'car' ? <Car className="w-4 h-4 inline mr-1" /> : '🏍️'} {vehicle.type}
+                  <div className="absolute top-2 right-2 bg-white px-3 py-1 rounded-full text-sm font-semibold text-gray-900 flex items-center gap-1">
+                    {vehicle.type === 'car' ? <Car className="w-4 h-4" /> : <span>🏍️</span>}
+                    <span>{vehicle.type}</span>
                   </div>
                 </div>
                 <div className="p-4">
@@ -193,21 +208,21 @@ const Home = () => {
                     <MapPin className="w-4 h-4 mr-1" />
                     {vehicle.location}
                   </div>
-                  <div className="flex items-center justify-between">
+                  <div className="flex items-center justify-between mb-3">
                     <div className="flex items-center">
                       <span className="text-yellow-500 mr-1">★</span>
                       <span className="font-medium text-gray-900">{vehicle.rating}</span>
                       <span className="text-gray-500 text-sm ml-1">({vehicle.trips} trips)</span>
                     </div>
                   </div>
-                  <div className="mt-3 pt-3 border-t border-gray-200">
+                  <div className="pt-3 border-t border-gray-200">
                     <div className="flex items-center justify-between">
                       <span className="text-2xl font-bold text-gray-900">₱{vehicle.price}</span>
                       <span className="text-gray-600 text-sm">/day</span>
                     </div>
                   </div>
                 </div>
-              </div>
+              </Link>
             ))}
           </div>
         </div>
@@ -218,9 +233,12 @@ const Home = () => {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
           <h2 className="text-3xl font-bold mb-4">Ready to Earn with Your Vehicle?</h2>
           <p className="text-xl text-blue-100 mb-8">List your car or motorcycle and start earning passive income today</p>
-          <button className="bg-white text-blue-600 font-semibold px-8 py-3 rounded-lg hover:bg-blue-50 transition duration-200">
+          <Link 
+            to="/host/dashboard"
+            className="inline-block bg-white text-blue-600 font-semibold px-8 py-3 rounded-lg hover:bg-blue-50 transition duration-200"
+          >
             Become a Host
-          </button>
+          </Link>
         </div>
       </div>
     </div>
