@@ -8,13 +8,18 @@ import Footer from './components/Footer';
 // Pages
 import Home from './pages/Home';
 import Login from './pages/Login';
+import SignUp from './pages/SignUp';
 import CarList from './pages/CarList';
-import CarDetails from './pages/CarDetails';
+import VehicleDetails from './pages/VehicleDetails';
+import BookingConfirmation from './pages/BookingConfirmation';
+import BookingSuccess from './pages/BookingSuccess';
 import HostDashboard from './pages/HostDashboard';
 import AddCar from './pages/AddCar';
 import AddMotorcycle from './pages/AddMotorcycle';
 import Profile from './pages/Profile';
-import SignUp from './pages/SignUp';
+import ChatsList from './pages/ChatsList';
+import Chat from './pages/Chat';
+import MyBookings from './pages/MyBookings';
 
 function App() {
   return (
@@ -28,7 +33,12 @@ function App() {
               <Route path="/login" element={<Login />} />
               <Route path="/signup" element={<SignUp />} />
               <Route path="/vehicles" element={<CarList />} />
-              <Route path="/vehicles/:id" element={<CarDetails />} />
+              <Route path="/vehicles/:id" element={<VehicleDetails />} />
+              <Route path="/booking/confirm/:id" element={<BookingConfirmation />} />
+              <Route path="/booking-success" element={<BookingSuccess />} />
+              <Route path="/my-bookings" element={<MyBookings />} />
+              <Route path="/chats" element={<ChatsList />} />
+              <Route path="/chat/:chatId" element={<Chat />} />
               <Route path="/host/dashboard" element={<HostDashboard />} />
               <Route path="/host/add-car" element={<AddCar />} />
               <Route path="/host/add-motorcycle" element={<AddMotorcycle />} />
