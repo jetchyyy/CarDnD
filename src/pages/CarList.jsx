@@ -108,30 +108,30 @@ const CarList = () => {
   const filteredVehicles = getFilteredVehicles();
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="min-h-screen bg-[#171717]">
       {/* Search Header */}
-      <div className="bg-white shadow-sm border-b border-gray-200">
+      <div className="bg-[#FFFFFF] shadow-xl border-b border-[#8C8C8C]/30">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
           <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
             <div className="flex-1">
-              <h1 className="text-2xl font-bold text-gray-900 mb-2">Available Vehicles</h1>
-              <p className="text-gray-600">Find your perfect ride</p>
+              <h1 className="text-2xl font-bold text-[#171717] mb-2">Available Vehicles</h1>
+              <p className="text-[#8C8C8C]">Find your perfect ride</p>
             </div>
             
             <div className="flex gap-3">
               <div className="relative flex-1 md:w-80">
-                <Search className="absolute left-3 top-3 w-5 h-5 text-gray-400" />
+                <Search className="absolute left-3 top-3 w-5 h-5 text-[#8C8C8C]" />
                 <input
                   type="text"
                   placeholder="Search by vehicle name..."
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
-                  className="w-full pl-10 pr-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-gray-900"
+                  className="w-full pl-10 pr-4 py-2.5 border border-[#8C8C8C] rounded-lg focus:ring-2 focus:ring-[#007BFF] focus:border-transparent text-[#171717] bg-[#FFFFFF]"
                 />
               </div>
               <button
                 onClick={() => setShowFilters(!showFilters)}
-                className="flex items-center gap-2 px-4 py-2.5 bg-gray-100 hover:bg-gray-200 rounded-lg font-medium text-gray-700 transition-colors"
+                className="flex items-center gap-2 px-4 py-2.5 bg-[#007BFF] hover:bg-[#0056b3] rounded-lg font-medium text-[#171717] transition-all hover:scale-105 shadow-md"
               >
                 <SlidersHorizontal className="w-5 h-5" />
                 Filters
@@ -145,18 +145,18 @@ const CarList = () => {
         <div className="flex flex-col lg:flex-row gap-8">
           {/* Filters Sidebar */}
           <aside className={`lg:w-64 ${showFilters ? 'block' : 'hidden lg:block'}`}>
-            <div className="bg-white rounded-lg shadow-md p-6 sticky top-24">
-              <h3 className="text-lg font-bold text-gray-900 mb-4">Filters</h3>
+            <div className="bg-[#FFFFFF] rounded-lg shadow-xl p-6 sticky top-24 border border-[#8C8C8C]/30">
+              <h3 className="text-lg font-bold text-[#171717] mb-4">Filters</h3>
               
               {/* Vehicle Type */}
               <div className="mb-6">
-                <label className="block text-sm font-medium text-gray-700 mb-2">
+                <label className="block text-sm font-medium text-[#171717] mb-2">
                   Vehicle Type
                 </label>
                 <select
                   value={filters.vehicleType}
                   onChange={(e) => handleFilterChange('vehicleType', e.target.value)}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-gray-900"
+                  className="w-full px-3 py-2 border border-[#8C8C8C] rounded-lg focus:ring-2 focus:ring-[#007BFF] focus:border-transparent text-[#171717] bg-[#FFFFFF]"
                 >
                   <option value="all">All Types</option>
                   <option value="car">Cars</option>
@@ -166,7 +166,7 @@ const CarList = () => {
 
               {/* Price Range */}
               <div className="mb-6">
-                <label className="block text-sm font-medium text-gray-700 mb-2">
+                <label className="block text-sm font-medium text-[#171717] mb-2">
                   Price Range (per day)
                 </label>
                 <div className="flex items-center gap-2">
@@ -175,28 +175,28 @@ const CarList = () => {
                     placeholder="Min"
                     value={filters.priceRange[0]}
                     onChange={(e) => handleFilterChange('priceRange', [parseInt(e.target.value) || 0, filters.priceRange[1]])}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 text-gray-900"
+                    className="w-full px-3 py-2 border border-[#8C8C8C] rounded-lg focus:ring-2 focus:ring-[#007BFF] text-[#171717] bg-[#FFFFFF]"
                   />
-                  <span className="text-gray-500">-</span>
+                  <span className="text-[#8C8C8C]">-</span>
                   <input
                     type="number"
                     placeholder="Max"
                     value={filters.priceRange[1]}
                     onChange={(e) => handleFilterChange('priceRange', [filters.priceRange[0], parseInt(e.target.value) || 10000])}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 text-gray-900"
+                    className="w-full px-3 py-2 border border-[#8C8C8C] rounded-lg focus:ring-2 focus:ring-[#007BFF] text-[#171717] bg-[#FFFFFF]"
                   />
                 </div>
               </div>
 
               {/* Transmission */}
               <div className="mb-6">
-                <label className="block text-sm font-medium text-gray-700 mb-2">
+                <label className="block text-sm font-medium text-[#171717] mb-2">
                   Transmission
                 </label>
                 <select
                   value={filters.transmission}
                   onChange={(e) => handleFilterChange('transmission', e.target.value)}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-gray-900"
+                  className="w-full px-3 py-2 border border-[#8C8C8C] rounded-lg focus:ring-2 focus:ring-[#007BFF] focus:border-transparent text-[#171717] bg-[#FFFFFF]"
                 >
                   <option value="all">All</option>
                   <option value="automatic">Automatic</option>
@@ -206,13 +206,13 @@ const CarList = () => {
 
               {/* Seats */}
               <div className="mb-6">
-                <label className="block text-sm font-medium text-gray-700 mb-2">
+                <label className="block text-sm font-medium text-[#171717] mb-2">
                   Seats
                 </label>
                 <select
                   value={filters.seats}
                   onChange={(e) => handleFilterChange('seats', e.target.value)}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-gray-900"
+                  className="w-full px-3 py-2 border border-[#8C8C8C] rounded-lg focus:ring-2 focus:ring-[#007BFF] focus:border-transparent text-[#171717] bg-[#FFFFFF]"
                 >
                   <option value="all">All</option>
                   <option value="2">2 seats</option>
@@ -223,13 +223,13 @@ const CarList = () => {
 
               {/* Sort By */}
               <div className="mb-6">
-                <label className="block text-sm font-medium text-gray-700 mb-2">
+                <label className="block text-sm font-medium text-[#171717] mb-2">
                   Sort By
                 </label>
                 <select
                   value={filters.sortBy}
                   onChange={(e) => handleFilterChange('sortBy', e.target.value)}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-gray-900"
+                  className="w-full px-3 py-2 border border-[#8C8C8C] rounded-lg focus:ring-2 focus:ring-[#007BFF] focus:border-transparent text-[#171717] bg-[#FFFFFF]"
                 >
                   <option value="recommended">Recommended</option>
                   <option value="price-low">Price: Low to High</option>
@@ -249,7 +249,7 @@ const CarList = () => {
                   });
                   setSearchQuery('');
                 }}
-                className="w-full bg-gray-100 hover:bg-gray-200 text-gray-700 font-medium py-2 rounded-lg transition-colors"
+                className="w-full bg-[#171717] hover:bg-[#171717]/90 text-[#FFFFFF] font-medium py-2 rounded-lg transition-all hover:scale-[1.02] shadow-md"
               >
                 Reset Filters
               </button>
@@ -259,22 +259,22 @@ const CarList = () => {
           {/* Vehicle Grid */}
           <main className="flex-1">
             <div className="mb-6">
-              <p className="text-gray-600">
-                <span className="font-semibold text-gray-900">{filteredVehicles.length} vehicles</span> available
+              <p className="text-[#E0E0E0]">
+                <span className="font-semibold text-[#007BFF]">{filteredVehicles.length} vehicles</span> available
               </p>
             </div>
 
             {loading ? (
               <div className="flex justify-center items-center py-20">
                 <div className="text-center">
-                  <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
-                  <p className="text-gray-600">Loading vehicles...</p>
+                  <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-[#007BFF] mx-auto mb-4"></div>
+                  <p className="text-[#E0E0E0]">Loading vehicles...</p>
                 </div>
               </div>
             ) : filteredVehicles.length === 0 ? (
               <div className="text-center py-20">
-                <p className="text-gray-500 text-lg mb-2">No vehicles found</p>
-                <p className="text-gray-400">Try adjusting your filters</p>
+                <p className="text-[#E0E0E0] text-lg mb-2">No vehicles found</p>
+                <p className="text-[#8C8C8C]">Try adjusting your filters</p>
               </div>
             ) : (
               <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">

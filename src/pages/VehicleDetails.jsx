@@ -55,10 +55,10 @@ const VehicleDetails = () => {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+      <div className="min-h-screen bg-[#171717] flex items-center justify-center">
         <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
-          <p className="text-gray-600">Loading vehicle details...</p>
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-[#007BFF] mx-auto mb-4"></div>
+          <p className="text-[#E0E0E0]">Loading vehicle details...</p>
         </div>
       </div>
     );
@@ -66,9 +66,9 @@ const VehicleDetails = () => {
 
   if (!vehicle) {
     return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+      <div className="min-h-screen bg-[#171717] flex items-center justify-center">
         <div className="text-center">
-          <p className="text-gray-600 text-lg">Vehicle not found</p>
+          <p className="text-[#E0E0E0] text-lg">Vehicle not found</p>
         </div>
       </div>
     );
@@ -150,37 +150,37 @@ const VehicleDetails = () => {
   };
 
   return (
-    <div className="min-h-screen bg-gray-50 pb-12">
+    <div className="min-h-screen bg-[#171717] pb-12">
       {/* Header */}
-      <div className="bg-white border-b border-gray-200">
+      <div className="bg-[#FFFFFF] border-b border-[#8C8C8C]/30">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
           <button
             onClick={() => navigate(-1)}
-            className="flex items-center text-gray-600 hover:text-gray-900 mb-4"
+            className="flex items-center text-[#8C8C8C] hover:text-[#007BFF] mb-4 transition-colors"
           >
             <ChevronLeft className="w-5 h-5 mr-1" />
             Back to listings
           </button>
           <div className="flex justify-between items-start">
             <div>
-              <h1 className="text-3xl font-bold text-gray-900 mb-2">
+              <h1 className="text-3xl font-bold text-[#171717] mb-2">
                 {vehicle.title || `${specs.brand} ${specs.model}`}
               </h1>
-              <div className="flex items-center gap-4 text-gray-600">
+              <div className="flex items-center gap-4 text-[#8C8C8C]">
                 <div className="flex items-center">
-                  <Star className="w-5 h-5 text-yellow-500 fill-current mr-1" />
-                  <span className="font-semibold">{vehicle.rating || 4.5}</span>
+                  <Star className="w-5 h-5 text-[#007BFF] fill-current mr-1" />
+                  <span className="font-semibold text-[#171717]">{vehicle.rating || 4.5}</span>
                   <span className="ml-1">({vehicle.totalTrips || 0} trips)</span>
                 </div>
                 <div className="flex items-center">
-                  <MapPin className="w-5 h-5 mr-1" />
+                  <MapPin className="w-5 h-5 mr-1 text-[#007BFF]" />
                   {vehicle.location}
                 </div>
               </div>
             </div>
-            <div className="text-right">
-              <div className="text-3xl font-bold text-gray-900">₱{vehicle.pricePerDay}</div>
-              <div className="text-gray-600">per day</div>
+            <div className="text-right bg-[#171717] px-6 py-3 rounded-lg border-2 border-[#007BFF]">
+              <div className="text-3xl font-bold text-[#007BFF]">₱{vehicle.pricePerDay}</div>
+              <div className="text-[#E0E0E0]">per day</div>
             </div>
           </div>
         </div>
@@ -191,7 +191,7 @@ const VehicleDetails = () => {
           {/* Main Content */}
           <div className="lg:col-span-2">
             {/* Image Gallery */}
-            <div className="bg-white rounded-xl shadow-md overflow-hidden mb-8">
+            <div className="bg-[#FFFFFF] rounded-xl shadow-xl overflow-hidden mb-8 border border-[#8C8C8C]/30">
               <div className="relative h-96">
                 {images.length > 0 ? (
                   <>
@@ -205,35 +205,35 @@ const VehicleDetails = () => {
                       <>
                         <button
                           onClick={handlePrevImage}
-                          className="absolute left-4 top-1/2 -translate-y-1/2 bg-white/90 hover:bg-white p-2 rounded-full shadow-lg"
+                          className="absolute left-4 top-1/2 -translate-y-1/2 bg-[#FFFFFF]/95 hover:bg-[#007BFF] p-2 rounded-full shadow-lg transition-all hover:scale-110"
                         >
-                          <ChevronLeft className="w-6 h-6 text-gray-900" />
+                          <ChevronLeft className="w-6 h-6 text-[#171717]" />
                         </button>
                         <button
                           onClick={handleNextImage}
-                          className="absolute right-4 top-1/2 -translate-y-1/2 bg-white/90 hover:bg-white p-2 rounded-full shadow-lg"
+                          className="absolute right-4 top-1/2 -translate-y-1/2 bg-[#FFFFFF]/95 hover:bg-[#007BFF] p-2 rounded-full shadow-lg transition-all hover:scale-110"
                         >
-                          <ChevronRight className="w-6 h-6 text-gray-900" />
+                          <ChevronRight className="w-6 h-6 text-[#171717]" />
                         </button>
                       </>
                     )}
                   </>
                 ) : (
-                  <div className="w-full h-full bg-gray-200 flex items-center justify-center">
-                    <p className="text-gray-500">No images available</p>
+                  <div className="w-full h-full bg-[#8C8C8C]/20 flex items-center justify-center">
+                    <p className="text-[#8C8C8C]">No images available</p>
                   </div>
                 )}
               </div>
               {images.length > 1 && (
-                <div className="p-4 flex gap-2 overflow-x-auto">
+                <div className="p-4 flex gap-2 overflow-x-auto bg-[#FFFFFF]">
                   {images.map((img, idx) => (
                     <img
                       key={idx}
                       src={img}
                       alt={`Thumbnail ${idx + 1}`}
                       onClick={() => setSelectedImage(idx)}
-                      className={`w-20 h-20 object-cover rounded-lg cursor-pointer ${
-                        selectedImage === idx ? 'ring-2 ring-blue-600' : 'opacity-60 hover:opacity-100'
+                      className={`w-20 h-20 object-cover rounded-lg cursor-pointer transition-all ${
+                        selectedImage === idx ? 'ring-2 ring-[#007BFF] scale-105' : 'opacity-60 hover:opacity-100'
                       }`}
                     />
                   ))}
@@ -242,61 +242,61 @@ const VehicleDetails = () => {
             </div>
 
             {/* Vehicle Specifications */}
-            <div className="bg-white rounded-xl shadow-md p-6 mb-8">
-              <h2 className="text-2xl font-bold text-gray-900 mb-6">Specifications</h2>
+            <div className="bg-[#FFFFFF] rounded-xl shadow-xl p-6 mb-8 border border-[#8C8C8C]/30">
+              <h2 className="text-2xl font-bold text-[#171717] mb-6">Specifications</h2>
               <div className="grid grid-cols-2 md:grid-cols-3 gap-6">
                 <div className="flex items-start">
-                  <Settings className="w-5 h-5 text-blue-600 mr-3 mt-1" />
+                  <Settings className="w-5 h-5 text-[#007BFF] mr-3 mt-1" />
                   <div>
-                    <p className="text-sm text-gray-600">Transmission</p>
-                    <p className="font-semibold text-gray-900 capitalize">{specs.transmission}</p>
+                    <p className="text-sm text-[#8C8C8C]">Transmission</p>
+                    <p className="font-semibold text-[#171717] capitalize">{specs.transmission}</p>
                   </div>
                 </div>
                 {isCar ? (
                   <>
                     <div className="flex items-start">
-                      <Fuel className="w-5 h-5 text-blue-600 mr-3 mt-1" />
+                      <Fuel className="w-5 h-5 text-[#007BFF] mr-3 mt-1" />
                       <div>
-                        <p className="text-sm text-gray-600">Fuel Type</p>
-                        <p className="font-semibold text-gray-900 capitalize">{specs.fuelType}</p>
+                        <p className="text-sm text-[#8C8C8C]">Fuel Type</p>
+                        <p className="font-semibold text-[#171717] capitalize">{specs.fuelType}</p>
                       </div>
                     </div>
                     <div className="flex items-start">
-                      <Users className="w-5 h-5 text-blue-600 mr-3 mt-1" />
+                      <Users className="w-5 h-5 text-[#007BFF] mr-3 mt-1" />
                       <div>
-                        <p className="text-sm text-gray-600">Seating</p>
-                        <p className="font-semibold text-gray-900">{specs.seats} seats</p>
+                        <p className="text-sm text-[#8C8C8C]">Seating</p>
+                        <p className="font-semibold text-[#171717]">{specs.seats} seats</p>
                       </div>
                     </div>
                   </>
                 ) : (
                   <div className="flex items-start">
-                    <Gauge className="w-5 h-5 text-blue-600 mr-3 mt-1" />
+                    <Gauge className="w-5 h-5 text-[#007BFF] mr-3 mt-1" />
                     <div>
-                      <p className="text-sm text-gray-600">Engine Size</p>
-                      <p className="font-semibold text-gray-900">{specs.engineSize}cc</p>
+                      <p className="text-sm text-[#8C8C8C]">Engine Size</p>
+                      <p className="font-semibold text-[#171717]">{specs.engineSize}cc</p>
                     </div>
                   </div>
                 )}
                 <div className="flex items-start">
-                  <Calendar className="w-5 h-5 text-blue-600 mr-3 mt-1" />
+                  <Calendar className="w-5 h-5 text-[#007BFF] mr-3 mt-1" />
                   <div>
-                    <p className="text-sm text-gray-600">Year</p>
-                    <p className="font-semibold text-gray-900">{specs.year}</p>
+                    <p className="text-sm text-[#8C8C8C]">Year</p>
+                    <p className="font-semibold text-[#171717]">{specs.year}</p>
                   </div>
                 </div>
                 <div className="flex items-start">
-                  <Shield className="w-5 h-5 text-blue-600 mr-3 mt-1" />
+                  <Shield className="w-5 h-5 text-[#007BFF] mr-3 mt-1" />
                   <div>
-                    <p className="text-sm text-gray-600">Plate Number</p>
-                    <p className="font-semibold text-gray-900">{specs.plateNumber}</p>
+                    <p className="text-sm text-[#8C8C8C]">Plate Number</p>
+                    <p className="font-semibold text-[#171717]">{specs.plateNumber}</p>
                   </div>
                 </div>
                 <div className="flex items-start">
-                  <CheckCircle className="w-5 h-5 text-blue-600 mr-3 mt-1" />
+                  <CheckCircle className="w-5 h-5 text-[#007BFF] mr-3 mt-1" />
                   <div>
-                    <p className="text-sm text-gray-600">Type</p>
-                    <p className="font-semibold text-gray-900 capitalize">{specs.type}</p>
+                    <p className="text-sm text-[#8C8C8C]">Type</p>
+                    <p className="font-semibold text-[#171717] capitalize">{specs.type}</p>
                   </div>
                 </div>
               </div>
@@ -304,16 +304,16 @@ const VehicleDetails = () => {
 
             {/* Features */}
             {Object.keys(features).filter(key => features[key]).length > 0 && (
-              <div className="bg-white rounded-xl shadow-md p-6 mb-8">
-                <h2 className="text-2xl font-bold text-gray-900 mb-6">Features & Amenities</h2>
+              <div className="bg-[#FFFFFF] rounded-xl shadow-xl p-6 mb-8 border border-[#8C8C8C]/30">
+                <h2 className="text-2xl font-bold text-[#171717] mb-6">Features & Amenities</h2>
                 <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
                   {Object.entries(features).map(([key, value]) => {
                     if (!value) return null;
                     const label = key.replace(/([A-Z])/g, ' $1').replace(/^./, str => str.toUpperCase());
                     return (
-                      <div key={key} className="flex items-center">
+                      <div key={key} className="flex items-center bg-[#171717]/5 p-3 rounded-lg hover:bg-[#007BFF]/10 transition-colors">
                         <span className="text-2xl mr-2">{featureIcons[key] || '✓'}</span>
-                        <span className="text-gray-700">{label}</span>
+                        <span className="text-[#171717] font-medium">{label}</span>
                       </div>
                     );
                   })}
@@ -322,21 +322,21 @@ const VehicleDetails = () => {
             )}
 
             {/* Description */}
-            <div className="bg-white rounded-xl shadow-md p-6 mb-8">
-              <h2 className="text-2xl font-bold text-gray-900 mb-4">Description</h2>
-              <p className="text-gray-700 leading-relaxed">{vehicle.description}</p>
+            <div className="bg-[#FFFFFF] rounded-xl shadow-xl p-6 mb-8 border border-[#8C8C8C]/30">
+              <h2 className="text-2xl font-bold text-[#171717] mb-4">Description</h2>
+              <p className="text-[#171717] leading-relaxed">{vehicle.description}</p>
             </div>
 
             {/* Host Info */}
-            <div className="bg-white rounded-xl shadow-md p-6">
-              <h2 className="text-2xl font-bold text-gray-900 mb-4">Hosted by</h2>
+            <div className="bg-[#FFFFFF] rounded-xl shadow-xl p-6 border border-[#8C8C8C]/30">
+              <h2 className="text-2xl font-bold text-[#171717] mb-4">Hosted by</h2>
               <div className="flex items-center">
-                <div className="w-16 h-16 bg-blue-600 rounded-full flex items-center justify-center text-white font-bold text-2xl mr-4">
+                <div className="w-16 h-16 bg-[#007BFF] rounded-full flex items-center justify-center text-[#171717] font-bold text-2xl mr-4 shadow-lg">
                   {vehicle.owner?.charAt(0).toUpperCase()}
                 </div>
                 <div>
-                  <p className="font-bold text-lg text-gray-900">{vehicle.owner}</p>
-                  <p className="text-gray-600">Joined {new Date(vehicle.createdAt).toLocaleDateString()}</p>
+                  <p className="font-bold text-lg text-[#171717]">{vehicle.owner}</p>
+                  <p className="text-[#8C8C8C]">Joined {new Date(vehicle.createdAt).toLocaleDateString()}</p>
                 </div>
               </div>
             </div>
@@ -344,11 +344,11 @@ const VehicleDetails = () => {
 
           {/* Booking Card */}
           <div className="lg:col-span-1">
-            <div className="bg-white rounded-xl shadow-md p-6 sticky top-24">
-              <h3 className="text-xl font-bold text-gray-900 mb-4">Book this vehicle</h3>
+            <div className="bg-[#FFFFFF] rounded-xl shadow-2xl p-6 sticky top-24 border-2 border-[#007BFF]">
+              <h3 className="text-xl font-bold text-[#171717] mb-4">Book this vehicle</h3>
               
               <div className="mb-4">
-                <label className="block text-sm font-medium text-gray-700 mb-2">
+                <label className="block text-sm font-medium text-[#171717] mb-2">
                   Start Date
                 </label>
                 <input
@@ -356,12 +356,12 @@ const VehicleDetails = () => {
                   value={bookingDates.startDate}
                   onChange={(e) => setBookingDates(prev => ({ ...prev, startDate: e.target.value }))}
                   min={new Date().toISOString().split('T')[0]}
-                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  className="w-full px-4 py-2 border border-[#8C8C8C] rounded-lg focus:ring-2 focus:ring-[#007BFF] focus:border-transparent bg-[#FFFFFF] text-[#171717]"
                 />
               </div>
 
               <div className="mb-4">
-                <label className="block text-sm font-medium text-gray-700 mb-2">
+                <label className="block text-sm font-medium text-[#171717] mb-2">
                   End Date
                 </label>
                 <input
@@ -369,30 +369,30 @@ const VehicleDetails = () => {
                   value={bookingDates.endDate}
                   onChange={(e) => setBookingDates(prev => ({ ...prev, endDate: e.target.value }))}
                   min={bookingDates.startDate || new Date().toISOString().split('T')[0]}
-                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  className="w-full px-4 py-2 border border-[#8C8C8C] rounded-lg focus:ring-2 focus:ring-[#007BFF] focus:border-transparent bg-[#FFFFFF] text-[#171717]"
                 />
               </div>
 
-              <div className="border-t border-gray-200 pt-4 mb-4">
+              <div className="border-t border-[#8C8C8C]/30 pt-4 mb-4">
                 <div className="flex justify-between mb-2">
-                  <span className="text-gray-600">₱{vehicle.pricePerDay} × {calculateDays()} days</span>
-                  <span className="font-semibold text-gray-900">₱{totalPrice}</span>
+                  <span className="text-[#8C8C8C]">₱{vehicle.pricePerDay} × {calculateDays()} days</span>
+                  <span className="font-semibold text-[#171717]">₱{totalPrice}</span>
                 </div>
-                <div className="flex justify-between text-lg font-bold text-gray-900">
+                <div className="flex justify-between text-lg font-bold text-[#171717]">
                   <span>Total</span>
-                  <span>₱{totalPrice}</span>
+                  <span className="text-[#007BFF]">₱{totalPrice}</span>
                 </div>
               </div>
 
               <button
                 onClick={handleBooking}
                 disabled={!bookingDates.startDate || !bookingDates.endDate}
-                className="w-full bg-blue-600 hover:bg-blue-700 disabled:bg-gray-400 text-white font-semibold py-3 rounded-lg transition-colors"
+                className="w-full bg-[#007BFF] hover:bg-[#0056b3] disabled:bg-[#8C8C8C] text-[#171717] font-semibold py-3 rounded-lg transition-all hover:scale-[1.02] shadow-lg"
               >
                 Continue to Booking
               </button>
 
-              <p className="text-xs text-gray-500 text-center mt-4">
+              <p className="text-xs text-[#8C8C8C] text-center mt-4">
                 You won't be charged yet
               </p>
             </div>
@@ -402,22 +402,22 @@ const VehicleDetails = () => {
 
       {/* Image Modal */}
       {showImageModal && (
-        <div className="fixed inset-0 bg-black bg-opacity-90 z-50 flex items-center justify-center">
+        <div className="fixed inset-0 bg-black bg-opacity-95 z-50 flex items-center justify-center">
           <button
             onClick={() => setShowImageModal(false)}
-            className="absolute top-4 right-4 text-white hover:text-gray-300"
+            className="absolute top-4 right-4 text-[#FFFFFF] hover:text-[#007BFF] transition-colors"
           >
             <X className="w-8 h-8" />
           </button>
           <button
             onClick={handlePrevImage}
-            className="absolute left-4 text-white hover:text-gray-300"
+            className="absolute left-4 text-[#FFFFFF] hover:text-[#007BFF] transition-colors"
           >
             <ChevronLeft className="w-12 h-12" />
           </button>
           <button
             onClick={handleNextImage}
-            className="absolute right-4 text-white hover:text-gray-300"
+            className="absolute right-4 text-[#FFFFFF] hover:text-[#007BFF] transition-colors"
           >
             <ChevronRight className="w-12 h-12" />
           </button>

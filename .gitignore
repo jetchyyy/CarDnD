@@ -22,3 +22,7 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+
+.github/copilot-instructions.md
+/docs
+./docs

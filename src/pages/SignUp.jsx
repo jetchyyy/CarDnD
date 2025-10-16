@@ -134,47 +134,47 @@ const SignUp = () => {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 to-blue-100 flex items-center justify-center px-4 py-12">
+    <div className="min-h-screen bg-gradient-to-br from-[#171717] via-[#171717] to-[#8C8C8C]/30 flex items-center justify-center px-4 py-12">
       <div className="max-w-md w-full">
         {/* Logo and Header */}
         <div className="text-center mb-8">
-          <div className="inline-flex items-center justify-center w-16 h-16 bg-blue-600 rounded-full mb-4">
-            <Car className="w-8 h-8 text-white" />
+          <div className="inline-flex items-center justify-center w-16 h-16 bg-[#007BFF] rounded-full mb-4 shadow-lg">
+            <Car className="w-8 h-8 text-[#171717]" />
           </div>
-          <h1 className="text-3xl font-bold text-gray-900 mb-2">Create Account</h1>
-          <p className="text-gray-600">Join CarDnD and start your journey</p>
+          <h1 className="text-3xl font-bold text-[#FFFFFF] mb-2">Create Account</h1>
+          <p className="text-[#E0E0E0]">Join CarDnD and start your journey</p>
         </div>
 
         {/* Main Form Card */}
-        <div className="bg-white rounded-2xl shadow-xl p-8">
+        <div className="bg-[#FFFFFF] rounded-2xl shadow-2xl p-8 border border-[#8C8C8C]/30">
           {/* Server Error Message */}
           {serverError && (
-            <div className="mb-6 bg-red-50 border border-red-200 rounded-lg p-4 flex items-start">
-              <AlertCircle className="w-5 h-5 text-red-600 mr-2 flex-shrink-0 mt-0.5" />
-              <p className="text-red-700 text-sm">{serverError}</p>
+            <div className="mb-6 bg-[#EF4444]/10 border border-[#EF4444] rounded-lg p-4 flex items-start">
+              <AlertCircle className="w-5 h-5 text-[#EF4444] mr-2 flex-shrink-0 mt-0.5" />
+              <p className="text-[#EF4444] text-sm">{serverError}</p>
             </div>
           )}
 
           <form onSubmit={handleSubmit} className="space-y-5">
             {/* Full Name Field */}
             <div>
-              <label htmlFor="fullName" className="block text-sm font-medium text-gray-700 mb-2">
+              <label htmlFor="fullName" className="block text-sm font-medium text-[#171717] mb-2">
                 Full Name
               </label>
               <div className="relative">
-                <User className="absolute left-3 top-3.5 w-5 h-5 text-gray-400" />
+                <User className="absolute left-3 top-3.5 w-5 h-5 text-[#8C8C8C]" />
                 <input
                   type="text"
                   id="fullName"
                   name="fullName"
                   value={formData.fullName}
                   onChange={handleInputChange}
-                  className={`w-full pl-10 pr-4 py-3 border ${errors.fullName ? 'border-red-500' : 'border-gray-300'} rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-colors text-gray-900`}
+                  className={`w-full pl-10 pr-4 py-3 border ${errors.fullName ? 'border-[#EF4444]' : 'border-[#8C8C8C]'} rounded-lg focus:ring-2 focus:ring-[#007BFF] focus:border-transparent transition-colors text-[#171717] bg-[#FFFFFF]`}
                   placeholder="John Doe"
                 />
               </div>
               {errors.fullName && (
-                <div className="flex items-center mt-2 text-red-600 text-sm">
+                <div className="flex items-center mt-2 text-[#EF4444] text-sm">
                   <AlertCircle className="w-4 h-4 mr-1" />
                   {errors.fullName}
                 </div>
@@ -183,23 +183,23 @@ const SignUp = () => {
 
             {/* Email Field */}
             <div>
-              <label htmlFor="email" className="block text-sm font-medium text-gray-700 mb-2">
+              <label htmlFor="email" className="block text-sm font-medium text-[#171717] mb-2">
                 Email Address
               </label>
               <div className="relative">
-                <Mail className="absolute left-3 top-3.5 w-5 h-5 text-gray-400" />
+                <Mail className="absolute left-3 top-3.5 w-5 h-5 text-[#8C8C8C]" />
                 <input
                   type="email"
                   id="email"
                   name="email"
                   value={formData.email}
                   onChange={handleInputChange}
-                  className={`w-full pl-10 pr-4 py-3 border ${errors.email ? 'border-red-500' : 'border-gray-300'} rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-colors text-gray-900`}
+                  className={`w-full pl-10 pr-4 py-3 border ${errors.email ? 'border-[#EF4444]' : 'border-[#8C8C8C]'} rounded-lg focus:ring-2 focus:ring-[#007BFF] focus:border-transparent transition-colors text-[#171717] bg-[#FFFFFF]`}
                   placeholder="you@example.com"
                 />
               </div>
               {errors.email && (
-                <div className="flex items-center mt-2 text-red-600 text-sm">
+                <div className="flex items-center mt-2 text-[#EF4444] text-sm">
                   <AlertCircle className="w-4 h-4 mr-1" />
                   {errors.email}
                 </div>
@@ -208,30 +208,30 @@ const SignUp = () => {
 
             {/* Password Field */}
             <div>
-              <label htmlFor="password" className="block text-sm font-medium text-gray-700 mb-2">
+              <label htmlFor="password" className="block text-sm font-medium text-[#171717] mb-2">
                 Password
               </label>
               <div className="relative">
-                <Lock className="absolute left-3 top-3.5 w-5 h-5 text-gray-400" />
+                <Lock className="absolute left-3 top-3.5 w-5 h-5 text-[#8C8C8C]" />
                 <input
                   type={showPassword ? 'text' : 'password'}
                   id="password"
                   name="password"
                   value={formData.password}
                   onChange={handleInputChange}
-                  className={`w-full pl-10 pr-12 py-3 border ${errors.password ? 'border-red-500' : 'border-gray-300'} rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-colors text-gray-900`}
+                  className={`w-full pl-10 pr-12 py-3 border ${errors.password ? 'border-[#EF4444]' : 'border-[#8C8C8C]'} rounded-lg focus:ring-2 focus:ring-[#007BFF] focus:border-transparent transition-colors text-[#171717] bg-[#FFFFFF]`}
                   placeholder="••••••••"
                 />
                 <button
                   type="button"
                   onClick={() => setShowPassword(!showPassword)}
-                  className="absolute right-3 top-3.5 text-gray-400 hover:text-gray-600"
+                  className="absolute right-3 top-3.5 text-[#8C8C8C] hover:text-[#171717] transition-colors"
                 >
                   {showPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
                 </button>
               </div>
               {errors.password && (
-                <div className="flex items-center mt-2 text-red-600 text-sm">
+                <div className="flex items-center mt-2 text-[#EF4444] text-sm">
                   <AlertCircle className="w-4 h-4 mr-1" />
                   {errors.password}
                 </div>
@@ -240,30 +240,30 @@ const SignUp = () => {
 
             {/* Confirm Password Field */}
             <div>
-              <label htmlFor="confirmPassword" className="block text-sm font-medium text-gray-700 mb-2">
+              <label htmlFor="confirmPassword" className="block text-sm font-medium text-[#171717] mb-2">
                 Confirm Password
               </label>
               <div className="relative">
-                <Lock className="absolute left-3 top-3.5 w-5 h-5 text-gray-400" />
+                <Lock className="absolute left-3 top-3.5 w-5 h-5 text-[#8C8C8C]" />
                 <input
                   type={showConfirmPassword ? 'text' : 'password'}
                   id="confirmPassword"
                   name="confirmPassword"
                   value={formData.confirmPassword}
                   onChange={handleInputChange}
-                  className={`w-full pl-10 pr-12 py-3 border ${errors.confirmPassword ? 'border-red-500' : 'border-gray-300'} rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-colors text-gray-900`}
+                  className={`w-full pl-10 pr-12 py-3 border ${errors.confirmPassword ? 'border-[#EF4444]' : 'border-[#8C8C8C]'} rounded-lg focus:ring-2 focus:ring-[#007BFF] focus:border-transparent transition-colors text-[#171717] bg-[#FFFFFF]`}
                   placeholder="••••••••"
                 />
                 <button
                   type="button"
                   onClick={() => setShowConfirmPassword(!showConfirmPassword)}
-                  className="absolute right-3 top-3.5 text-gray-400 hover:text-gray-600"
+                  className="absolute right-3 top-3.5 text-[#8C8C8C] hover:text-[#171717] transition-colors"
                 >
                   {showConfirmPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
                 </button>
               </div>
               {errors.confirmPassword && (
-                <div className="flex items-center mt-2 text-red-600 text-sm">
+                <div className="flex items-center mt-2 text-[#EF4444] text-sm">
                   <AlertCircle className="w-4 h-4 mr-1" />
                   {errors.confirmPassword}
                 </div>
@@ -272,36 +272,36 @@ const SignUp = () => {
 
             {/* Role Selection */}
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-3">
+              <label className="block text-sm font-medium text-[#171717] mb-3">
                 I want to
               </label>
               <div className="grid grid-cols-2 gap-3">
                 <button
                   type="button"
                   onClick={() => setFormData(prev => ({ ...prev, role: 'guest' }))}
-                  className={`p-4 border-2 rounded-lg transition-all ${
+                  className={`p-4 border-2 rounded-lg transition-all hover:scale-105 ${
                     formData.role === 'guest'
-                      ? 'border-blue-600 bg-blue-50'
-                      : 'border-gray-300 hover:border-gray-400'
+                      ? 'border-[#007BFF] bg-[#007BFF]/20'
+                      : 'border-[#8C8C8C] hover:border-[#007BFF]/50'
                   }`}
                 >
                   <div className="text-center">
-                    <div className="text-lg font-semibold text-gray-900">Rent Cars</div>
-                    <div className="text-xs text-gray-600 mt-1">As a Guest</div>
+                    <div className="text-lg font-semibold text-[#171717]">Rent Cars</div>
+                    <div className="text-xs text-[#8C8C8C] mt-1">As a Guest</div>
                   </div>
                 </button>
                 <button
                   type="button"
                   onClick={() => setFormData(prev => ({ ...prev, role: 'host' }))}
-                  className={`p-4 border-2 rounded-lg transition-all ${
+                  className={`p-4 border-2 rounded-lg transition-all hover:scale-105 ${
                     formData.role === 'host'
-                      ? 'border-blue-600 bg-blue-50'
-                      : 'border-gray-300 hover:border-gray-400'
+                      ? 'border-[#007BFF] bg-[#007BFF]/20'
+                      : 'border-[#8C8C8C] hover:border-[#007BFF]/50'
                   }`}
                 >
                   <div className="text-center">
-                    <div className="text-lg font-semibold text-gray-900">List Cars</div>
-                    <div className="text-xs text-gray-600 mt-1">As a Host</div>
+                    <div className="text-lg font-semibold text-[#171717]">List Cars</div>
+                    <div className="text-xs text-[#8C8C8C] mt-1">As a Host</div>
                   </div>
                 </button>
               </div>
@@ -311,11 +311,11 @@ const SignUp = () => {
             <button
               type="submit"
               disabled={loading}
-              className="w-full bg-blue-600 hover:bg-blue-700 disabled:bg-blue-400 text-white font-semibold py-3 rounded-lg transition duration-200 flex items-center justify-center"
+              className="w-full bg-[#007BFF] hover:bg-[#0056b3] disabled:bg-[#8C8C8C] text-[#171717] font-semibold py-3 rounded-lg transition-all hover:scale-[1.02] flex items-center justify-center shadow-lg"
             >
               {loading ? (
                 <div className="flex items-center">
-                  <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin mr-2"></div>
+                  <div className="w-5 h-5 border-2 border-[#171717] border-t-transparent rounded-full animate-spin mr-2"></div>
                   Creating Account...
                 </div>
               ) : (
@@ -326,10 +326,10 @@ const SignUp = () => {
             {/* Divider */}
             <div className="relative">
               <div className="absolute inset-0 flex items-center">
-                <div className="w-full border-t border-gray-300"></div>
+                <div className="w-full border-t border-[#8C8C8C]"></div>
               </div>
               <div className="relative flex justify-center text-sm">
-                <span className="px-4 bg-white text-gray-500">Or continue with</span>
+                <span className="px-4 bg-[#FFFFFF] text-[#8C8C8C]">Or continue with</span>
               </div>
             </div>
 
@@ -338,7 +338,7 @@ const SignUp = () => {
               type="button"
               onClick={handleGoogleSignUp}
               disabled={loading}
-              className="w-full bg-white border border-gray-300 hover:bg-gray-50 disabled:bg-gray-100 text-gray-700 font-medium py-3 rounded-lg transition duration-200 flex items-center justify-center"
+              className="w-full bg-[#FFFFFF] border-2 border-[#8C8C8C] hover:bg-[#FFFFFF]/80 hover:border-[#007BFF] disabled:bg-[#8C8C8C] text-[#171717] font-medium py-3 rounded-lg transition-all hover:scale-[1.02] flex items-center justify-center"
             >
               <svg className="w-5 h-5 mr-2" viewBox="0 0 24 24">
                 <path
@@ -362,22 +362,22 @@ const SignUp = () => {
             </button>
 
             {/* Terms and Privacy */}
-            <p className="text-xs text-gray-600 text-center">
+            <p className="text-xs text-[#8C8C8C] text-center">
               By signing up, you agree to our{' '}
-              <a href="#" className="text-blue-600 hover:underline">Terms of Service</a>
+              <a href="#" className="text-[#007BFF] hover:text-[#007BFF]/80 transition-colors">Terms of Service</a>
               {' '}and{' '}
-              <a href="#" className="text-blue-600 hover:underline">Privacy Policy</a>
+              <a href="#" className="text-[#007BFF] hover:text-[#007BFF]/80 transition-colors">Privacy Policy</a>
             </p>
           </form>
         </div>
 
         {/* Toggle to Login */}
         <div className="mt-6 text-center">
-          <p className="text-gray-600">
+          <p className="text-[#E0E0E0]">
             Already have an account?{' '}
             <Link
               to="/login"
-              className="text-blue-600 hover:text-blue-700 font-semibold"
+              className="text-[#007BFF] hover:text-[#007BFF]/80 font-semibold transition-colors"
             >
               Sign in
             </Link>
