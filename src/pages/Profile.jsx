@@ -433,13 +433,11 @@ const Profile = () => {
                   <input
                     type="text"
                     name="fullName"
-                    value={isEditing ? tempData.fullName : profileData.fullName}
-                    onChange={handleInputChange}
-                    disabled={!isEditing}
-                    className={`w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-gray-900 ${
-                      !isEditing ? 'bg-gray-50' : ''
-                    }`}
+                    value={profileData.fullName}
+                    disabled
+                    className="w-full px-4 py-2.5 border border-gray-300 rounded-lg bg-gray-50 text-gray-900 cursor-not-allowed"
                   />
+                  <p className="text-xs text-gray-500 mt-1">Full name cannot be changed</p>
                 </div>
 
                 <div>

@@ -47,7 +47,7 @@ const BookingConfirmation = () => {
         );
 
         if (!isAvailable) {
-          setError('Sorry, this vehicle is no longer available for the selected dates.');
+          setError('Sorry, this vehicle is not available for the selected dates.');
         }
       } catch (err) {
         console.error('Error checking availability:', err);
