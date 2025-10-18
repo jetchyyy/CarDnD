@@ -1,13 +1,44 @@
 // src/utils/bookingService.js
 import { collection, addDoc, doc, getDoc, query, where, getDocs } from 'firebase/firestore';
-import { db } from '../firebase/firebase';
+import { db,storage } from '../firebase/firebase';
+import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 
 /**
  * Create a new booking
  * @param {Object} bookingData - Booking information
  * @returns {Promise<string>} Booking ID
  */
+
+export const uploadPayment = async (images, paymentId) => {
+  if (!images) throw new Error("No images provided to uploadPayment.");
+
+  const files = Array.isArray(images) ? images : [images];
+  if (files.length === 0) throw new Error("No images provided to uploadPayment.");
+
+  const imageUrls = [];
+
+  for (let i = 0; i < files.length; i++) {
+    const file = files[i];
+    const timestamp = Date.now();
+    const extension = file.name.split(".").pop();
+    const fileName = `${paymentId}_${timestamp}_${i}.${extension}`;
+
+    const storageRef = ref(storage, `booking/${paymentId}/${fileName}`);
+
+    try {
+      await uploadBytes(storageRef, file);
+      const url = await getDownloadURL(storageRef);
+      imageUrls.push(url);
+    } catch (error) {
+      console.error("Error uploading image:", error);
+      throw new Error(`Failed to upload image ${i + 1}`);
+    }
+  }
+
+  return imageUrls;
+};
 export const createBooking = async (bookingData) => {
+
   try {
     const booking = {
       carId: bookingData.carId,
@@ -26,7 +57,8 @@ export const createBooking = async (bookingData) => {
       guestDetails: {
         name: bookingData.guestName,
         email: bookingData.guestEmail,
-      }
+      },
+      paymentReceipt: bookingData.paymentReceipt,
     };
 
     const docRef = await addDoc(collection(db, 'bookings'), booking);
@@ -151,3 +183,4 @@ export const checkAvailability = async (vehicleId, startDate, endDate) => {
     throw error;
   }
 };
+

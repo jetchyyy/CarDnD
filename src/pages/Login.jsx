@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { useNavigate, useLocation, Link } from 'react-router-dom';
 import { Mail, Lock, Eye, EyeOff, Car, AlertCircle } from 'lucide-react';
 import { useAuth } from '../context/Authcontext';
+import { loginSession } from '../utils/Session';
 
 const Login = () => {
   const [showPassword, setShowPassword] = useState(false);
@@ -83,6 +84,7 @@ const Login = () => {
     if (result.success) {
       // Redirect will happen automatically via useEffect watching user state
       // No need to manually navigate here
+      loginSession();
     } else {
       // Handle Firebase error messages
       let errorMessage = 'An error occurred. Please try again.';
@@ -111,6 +113,7 @@ const Login = () => {
 
     if (result.success) {
       // Redirect will happen automatically via useEffect watching user state
+      loginSession();
     } else {
       let errorMessage = 'Failed to sign in with Google. Please try again.';
       
