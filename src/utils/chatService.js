@@ -1,6 +1,49 @@
-// src/utils/chatService.js
+// Updated chatService.js with unread message counting
 import { ref, push, set, onValue, off, get, update } from 'firebase/database';
 import { realtimeDb } from '../firebase/firebase';
+
+/**
+ * Get unread message count for a user across all chats
+ * @param {string} userId - User ID
+ * @param {Array} userChats - Array of user's chats
+ * @returns {number} Total unread message count
+ */
+export const getUnreadMessageCount = (userId, userChats) => {
+  let totalUnread = 0;
+
+  userChats.forEach(chat => {
+    if (chat.lastMessage && chat.updatedAt) {
+      const lastSeenKey = `lastSeen_${userId}`;
+      const lastSeenTime = chat[lastSeenKey] || 0;
+      const lastMessageTime = chat.updatedAt || 0;
+
+      // If message is newer than last seen AND wasn't sent by current user
+      if (lastMessageTime > lastSeenTime && chat.lastMessageSenderId !== userId) {
+        totalUnread++;
+      }
+    }
+  });
+
+  return totalUnread;
+};
+
+/**
+ * Get unread chats (chats with unread messages)
+ * @param {string} userId - User ID
+ * @param {Array} userChats - Array of user's chats
+ * @returns {Array} Array of chats with unread messages
+ */
+export const getUnreadChats = (userId, userChats) => {
+  return userChats.filter(chat => {
+    if (!chat.lastMessage || !chat.updatedAt) return false;
+
+    const lastSeenKey = `lastSeen_${userId}`;
+    const lastSeenTime = chat[lastSeenKey] || 0;
+    const lastMessageTime = chat.updatedAt || 0;
+
+    return lastMessageTime > lastSeenTime && chat.lastMessageSenderId !== userId;
+  });
+};
 
 /**
  * Create or get existing chat between host and guest
@@ -11,27 +54,18 @@ import { realtimeDb } from '../firebase/firebase';
  */
 export const createOrGetChat = async (hostId, guestId, bookingId = null) => {
   try {
-    // Check if chat already exists
     const chatsRef = ref(realtimeDb, 'chats');
     const snapshot = await get(chatsRef);
-    
+
     if (snapshot.exists()) {
       const chats = snapshot.val();
-      
-      // Find existing chat between these users
+
       for (const [chatId, chat] of Object.entries(chats)) {
         if (chat.participants) {
-          if (
-            chat.participants[hostId] &&
-            chat.participants[guestId]
-          ) {
-            console.log('Existing chat found:', chatId);
+          if (chat.participants[hostId] && chat.participants[guestId]) {
             return chatId;
           }
         } else if (chat.bookingId === bookingId && bookingId) {
-          // Fallback: find by booking ID for old chats
-          console.log('Existing chat found by booking ID:', chatId);
-          // Update it with participants
           await update(ref(realtimeDb, `chats/${chatId}`), {
             participants: {
               [hostId]: true,
@@ -42,11 +76,10 @@ export const createOrGetChat = async (hostId, guestId, bookingId = null) => {
         }
       }
     }
-    
-    // Create new chat if none exists
+
     const newChatRef = push(ref(realtimeDb, 'chats'));
     const chatId = newChatRef.key;
-    
+
     const chatData = {
       participants: {
         [hostId]: true,
@@ -56,18 +89,19 @@ export const createOrGetChat = async (hostId, guestId, bookingId = null) => {
       guestId: guestId,
       lastMessage: '',
       lastMessageSender: '',
+      lastMessageSenderId: '',
       updatedAt: Date.now(),
       bookingId: bookingId || null,
       createdAt: Date.now(),
+      [`lastSeen_${hostId}`]: Date.now(),
+      [`lastSeen_${guestId}`]: Date.now(),
       messages: {}
     };
-    
+
     await set(newChatRef, chatData);
-    console.log('New chat created:', chatId);
-    
+
     return chatId;
   } catch (error) {
-    console.error('Error creating/getting chat:', error);
     throw error;
   }
 };
@@ -95,19 +129,35 @@ export const sendMessage = async (chatId, senderId, message, senderName) => {
     // Set the message
     await set(messageRef, messageData);
     
-    // Update chat's last message
+    // Update chat's last message - DO NOT update sender's lastSeen
     const chatUpdates = {
       lastMessage: message,
       lastMessageSender: senderName,
+      lastMessageSenderId: senderId,
       updatedAt: Date.now()
     };
     
     await update(ref(realtimeDb, `chats/${chatId}`), chatUpdates);
     
-    console.log('Message sent:', messageId);
     return messageId;
   } catch (error) {
-    console.error('Error sending message:', error);
+    throw error;
+  }
+};
+
+/**
+ * Mark chat as read for a user
+ * @param {string} chatId - Chat ID
+ * @param {string} userId - User ID
+ */
+export const markChatAsRead = async (chatId, userId) => {
+  try {
+    const chatUpdates = {
+      [`lastSeen_${userId}`]: Date.now()
+    };
+
+    await update(ref(realtimeDb, `chats/${chatId}`), chatUpdates);
+  } catch (error) {
     throw error;
   }
 };
@@ -120,31 +170,27 @@ export const sendMessage = async (chatId, senderId, message, senderName) => {
  */
 export const listenToMessages = (chatId, callback) => {
   const messagesRef = ref(realtimeDb, `chats/${chatId}/messages`);
-  
+
   const unsubscribe = onValue(messagesRef, (snapshot) => {
     const messages = [];
     if (snapshot.exists()) {
       const messagesData = snapshot.val();
-      
-      // Convert object to array
+
       for (const [messageId, messageData] of Object.entries(messagesData)) {
         messages.push({
           id: messageId,
           ...messageData
         });
       }
-      
-      // Sort by timestamp (oldest first)
+
       messages.sort((a, b) => a.timestamp - b.timestamp);
     }
-    
-    console.log('Messages updated:', messages);
+
     callback(messages);
   }, (error) => {
-    console.error('Error listening to messages:', error);
+    throw error;
   });
-  
-  // Return unsubscribe function
+
   return unsubscribe;
 };
 
@@ -157,11 +203,11 @@ export const getUserChats = async (userId) => {
   try {
     const chatsRef = ref(realtimeDb, 'chats');
     const snapshot = await get(chatsRef);
-    
+
     const userChats = [];
     if (snapshot.exists()) {
       const chats = snapshot.val();
-      
+
       for (const [chatId, chat] of Object.entries(chats)) {
         if (chat.participants && chat.participants[userId]) {
           userChats.push({
@@ -171,13 +217,11 @@ export const getUserChats = async (userId) => {
         }
       }
     }
-    
-    // Sort by most recent
+
     userChats.sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0));
-    
+
     return userChats;
   } catch (error) {
-    console.error('Error getting user chats:', error);
     throw error;
   }
 };
@@ -190,12 +234,12 @@ export const getUserChats = async (userId) => {
  */
 export const listenToUserChats = (userId, callback) => {
   const chatsRef = ref(realtimeDb, 'chats');
-  
+
   const unsubscribe = onValue(chatsRef, (snapshot) => {
     const userChats = [];
     if (snapshot.exists()) {
       const chats = snapshot.val();
-      
+
       for (const [chatId, chat] of Object.entries(chats)) {
         if (chat.participants && chat.participants[userId]) {
           userChats.push({
@@ -205,14 +249,12 @@ export const listenToUserChats = (userId, callback) => {
         }
       }
     }
-    
-    // Sort by most recent
+
     userChats.sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0));
-    
+
     callback(userChats);
   });
-  
-  // Return unsubscribe function
+
   return unsubscribe;
 };
 
@@ -225,7 +267,7 @@ export const getChatDetails = async (chatId) => {
   try {
     const chatRef = ref(realtimeDb, `chats/${chatId}`);
     const snapshot = await get(chatRef);
-    
+
     if (snapshot.exists()) {
       const chat = snapshot.val();
       return {
@@ -234,10 +276,9 @@ export const getChatDetails = async (chatId) => {
         participants: chat.participants || {}
       };
     }
-    
+
     throw new Error('Chat not found');
   } catch (error) {
-    console.error('Error getting chat details:', error);
     throw error;
   }
 };

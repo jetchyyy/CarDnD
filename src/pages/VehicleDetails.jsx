@@ -12,15 +12,21 @@ import {
   CheckCircle,
   ChevronLeft,
   ChevronRight,
-  X
+  X,
+  MessageCircle
 } from 'lucide-react';
+import GuestBookingCalendar from '../components/GuestBookingCalendar';
 import { db, auth } from '../firebase/firebase';
-import { doc, getDoc } from 'firebase/firestore';
+import { doc, getDoc, collection, getDocs, query, orderBy, where } from 'firebase/firestore';
+import { createOrGetChat } from '../utils/chatService';
 
 const VehicleDetails = () => {
   const { id } = useParams();
   const navigate = useNavigate();
   const [vehicle, setVehicle] = useState(null);
+  const [bookings, setBookings] = useState([]);
+  const [reviews, setReviews] = useState([]);
+  const [averageRating, setAverageRating] = useState(0);
   const [loading, setLoading] = useState(true);
   const [selectedImage, setSelectedImage] = useState(0);
   const [showImageModal, setShowImageModal] = useState(false);
@@ -28,6 +34,7 @@ const VehicleDetails = () => {
     startDate: '',
     endDate: ''
   });
+  const [messageLoading, setMessageLoading] = useState(false);
 
   // Fetch vehicle details
   useEffect(() => {
@@ -52,6 +59,63 @@ const VehicleDetails = () => {
 
     fetchVehicle();
   }, [id, navigate]);
+
+  // Fetch bookings for availability checking
+  useEffect(() => {
+    const fetchBookings = async () => {
+      try {
+        const q = query(collection(db, 'bookings'), orderBy('createdAt', 'desc'));
+        const snapshot = await getDocs(q);
+        const fetchedBookings = snapshot.docs.map(doc => ({
+          id: doc.id,
+          ...doc.data(),
+        }));
+        setBookings(fetchedBookings);
+      } catch (error) {
+        console.error('Error fetching bookings:', error);
+      }
+    };
+
+    fetchBookings();
+  }, []);
+
+  // Fetch reviews and calculate rating
+  useEffect(() => {
+    const fetchReviews = async () => {
+      try {
+        const q = query(collection(db, 'reviews'), where('carId', '==', id));
+        const snapshot = await getDocs(q);
+        const fetchedReviews = snapshot.docs.map(doc => {
+          const data = doc.data();
+          return {
+            id: doc.id,
+            ...data,
+            rating: data.rating || 0,
+          };
+        });
+        
+        setReviews(fetchedReviews);
+
+        // Calculate average rating
+        if (fetchedReviews.length > 0) {
+          const avgRating = (
+            fetchedReviews.reduce((sum, r) => sum + (r.rating || 0), 0) / 
+            fetchedReviews.length
+          ).toFixed(1);
+          setAverageRating(parseFloat(avgRating));
+        } else {
+          setAverageRating(0);
+        }
+      } catch (error) {
+        console.error('Error fetching reviews:', error);
+        setAverageRating(0);
+      }
+    };
+
+    if (id) {
+      fetchReviews();
+    }
+  }, [id]);
 
   if (loading) {
     return (
@@ -129,6 +193,59 @@ const VehicleDetails = () => {
     });
   };
 
+  const handleMessageHost = async () => {
+    const currentUser = auth.currentUser;
+    
+    // Check if user is logged in
+    if (!currentUser) {
+      navigate('/login', { state: { from: `/vehicles/${id}` } });
+      return;
+    }
+
+    // Get the host ID from vehicle object
+    const hostId = vehicle.hostId;
+    
+    if (!hostId) {
+      console.error('Host ID not found in vehicle object:', vehicle);
+      alert('Unable to identify vehicle host. Please try again later.');
+      return;
+    }
+
+    // Check if user is trying to message themselves
+    if (currentUser.uid === hostId) {
+      alert('You cannot message yourself');
+      return;
+    }
+
+    setMessageLoading(true);
+    
+    try {
+      // Create or get existing chat
+      const chatId = await createOrGetChat(hostId, currentUser.uid);
+      
+      // Navigate to chat
+      navigate(`/messages/${chatId}`);
+    } catch (error) {
+      console.error('Error creating chat:', error);
+      alert('Failed to start chat. Please try again.');
+    } finally {
+      setMessageLoading(false);
+    }
+  };
+
+  const renderStars = (rating) => {
+    return [...Array(5)].map((_, i) => (
+      <Star
+        key={i}
+        className={`w-5 h-5 ${
+          i < Math.round(rating)
+            ? 'text-yellow-500 fill-current'
+            : 'text-gray-300'
+        }`}
+      />
+    ));
+  };
+
   const featureIcons = {
     ac: '❄️',
     bluetooth: '📱',
@@ -167,10 +284,12 @@ const VehicleDetails = () => {
                 {vehicle.title || `${specs.brand} ${specs.model}`}
               </h1>
               <div className="flex items-center gap-4 text-gray-600">
-                <div className="flex items-center">
-                  <Star className="w-5 h-5 text-yellow-500 fill-current mr-1" />
-                  <span className="font-semibold">{vehicle.rating || 4.5}</span>
-                  <span className="ml-1">({vehicle.totalTrips || 0} trips)</span>
+                <div className="flex items-center gap-2">
+                  <div className="flex gap-1">
+                    {renderStars(averageRating)}
+                  </div>
+                  <span className="font-semibold text-gray-900">{averageRating}</span>
+                  <span className="ml-1">({reviews.length} reviews)</span>
                 </div>
                 <div className="flex items-center">
                   <MapPin className="w-5 h-5 mr-1" />
@@ -240,6 +359,12 @@ const VehicleDetails = () => {
                 </div>
               )}
             </div>
+
+            {/* Booking Calendar */}
+            <GuestBookingCalendar 
+              vehicle={vehicle} 
+              bookings={bookings}
+            />
 
             {/* Vehicle Specifications */}
             <div className="bg-white rounded-xl shadow-md p-6 mb-8">
@@ -330,14 +455,24 @@ const VehicleDetails = () => {
             {/* Host Info */}
             <div className="bg-white rounded-xl shadow-md p-6">
               <h2 className="text-2xl font-bold text-gray-900 mb-4">Hosted by</h2>
-              <div className="flex items-center">
-                <div className="w-16 h-16 bg-blue-600 rounded-full flex items-center justify-center text-white font-bold text-2xl mr-4">
-                  {vehicle.owner?.charAt(0).toUpperCase()}
+              <div className="flex items-center justify-between">
+                <div className="flex items-center">
+                  <div className="w-16 h-16 bg-blue-600 rounded-full flex items-center justify-center text-white font-bold text-2xl mr-4">
+                    {vehicle.owner?.charAt(0).toUpperCase()}
+                  </div>
+                  <div>
+                    <p className="font-bold text-lg text-gray-900">{vehicle.owner}</p>
+                    <p className="text-gray-600">Joined {new Date(vehicle.createdAt).toLocaleDateString()}</p>
+                  </div>
                 </div>
-                <div>
-                  <p className="font-bold text-lg text-gray-900">{vehicle.owner}</p>
-                  <p className="text-gray-600">Joined {new Date(vehicle.createdAt).toLocaleDateString()}</p>
-                </div>
+                <button
+                  onClick={handleMessageHost}
+                  disabled={messageLoading}
+                  className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-400 text-white px-4 py-2 rounded-lg transition-colors"
+                >
+                  <MessageCircle className="w-5 h-5" />
+                  {messageLoading ? 'Loading...' : 'Message Host'}
+                </button>
               </div>
             </div>
           </div>

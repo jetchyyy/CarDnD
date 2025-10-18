@@ -2,7 +2,7 @@ import { useState, useEffect, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { Send, ArrowLeft, User } from 'lucide-react';
 import { auth } from '../firebase/firebase';
-import { sendMessage, listenToMessages, getChatDetails } from '../utils/chatService';
+import { sendMessage, listenToMessages, getChatDetails, markChatAsRead } from '../utils/chatService';
 
 const Chat = () => {
   const { chatId } = useParams();
@@ -35,21 +35,17 @@ const Chat = () => {
       }
 
       try {
-        console.log('Fetching chat details for chatId:', chatId);
         const chat = await getChatDetails(chatId);
-        console.log('Chat details received:', chat);
         setChatDetails(chat);
 
-        // Get other user ID from participants (new format) or users (old format)
+        // Get other user ID from participants
         let otherUserId = null;
         
         if (chat.participants && typeof chat.participants === 'object') {
           const participantIds = Object.keys(chat.participants).filter(id => id !== 'true' && id !== 'false');
           otherUserId = participantIds.find(uid => uid !== currentUser.uid);
-          console.log('Other user ID from participants:', otherUserId);
         } else if (chat.users && Array.isArray(chat.users)) {
           otherUserId = chat.users.find(uid => uid !== currentUser.uid);
-          console.log('Other user ID from users array:', otherUserId);
         }
         
         if (otherUserId) {
@@ -58,11 +54,9 @@ const Chat = () => {
             name: 'User'
           });
         } else {
-          console.warn('Could not determine other user:', chat);
           setError('Could not load chat participant information');
         }
       } catch (err) {
-        console.error('Error fetching chat info:', err);
         setError('Failed to load chat: ' + err.message);
       }
     };
@@ -75,33 +69,57 @@ const Chat = () => {
   // Listen to messages in real-time
   useEffect(() => {
     if (!chatId) {
-      console.log('No chatId provided');
       return;
     }
 
-    console.log('Setting up message listener for chatId:', chatId);
     setLoading(true);
     let unsubscribe;
     
     try {
       unsubscribe = listenToMessages(chatId, (fetchedMessages) => {
-        console.log('Messages received from listener:', fetchedMessages);
         setMessages(fetchedMessages);
         setLoading(false);
+        
+        // Only mark as read if the current user is the RECEIVER (not the sender of the last message)
+        if (currentUser && document.hasFocus() && fetchedMessages.length > 0) {
+          const lastMessage = fetchedMessages[fetchedMessages.length - 1];
+          // Only mark as read if last message was from someone else
+          if (lastMessage.senderId !== currentUser.uid) {
+            setTimeout(() => {
+              markChatAsRead(chatId, currentUser.uid);
+            }, 500);
+          }
+        }
       });
     } catch (err) {
-      console.error('Error setting up message listener:', err);
       setError('Failed to load messages: ' + err.message);
       setLoading(false);
     }
 
     return () => {
       if (unsubscribe) {
-        console.log('Unsubscribing from messages');
         unsubscribe();
       }
     };
-  }, [chatId]);
+  }, [chatId, currentUser]);
+
+  // Mark as read when window gains focus (only if receiver)
+  useEffect(() => {
+    const handleFocus = () => {
+      if (currentUser && chatId && messages.length > 0) {
+        const lastMessage = messages[messages.length - 1];
+        // Only mark as read if last message was from someone else
+        if (lastMessage.senderId !== currentUser.uid) {
+          setTimeout(() => {
+            markChatAsRead(chatId, currentUser.uid);
+          }, 1000);
+        }
+      }
+    };
+
+    window.addEventListener('focus', handleFocus);
+    return () => window.removeEventListener('focus', handleFocus);
+  }, [chatId, currentUser, messages]);
 
   const handleSendMessage = async (e) => {
     e.preventDefault();
@@ -111,12 +129,10 @@ const Chat = () => {
     setSending(true);
     try {
       const senderName = currentUser.displayName || currentUser.email?.split('@')[0] || 'User';
-      console.log('Sending message:', { chatId, senderId: currentUser.uid, message: newMessage, senderName });
       
       await sendMessage(chatId, currentUser.uid, newMessage.trim(), senderName);
       setNewMessage('');
     } catch (err) {
-      console.error('Error sending message:', err);
       setError('Failed to send message: ' + err.message);
       alert('Failed to send message. Please try again.');
     } finally {

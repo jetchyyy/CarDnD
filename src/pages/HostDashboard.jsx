@@ -17,6 +17,7 @@ import {
 } from 'lucide-react';
 import AddCar from './AddCar';
 import AddMotorcycle from './AddMotorcycle';
+import BookingCalendar from '../components/BookingCalendar';
 import { db, auth } from '../firebase/firebase';
 import { collection, query, where, getDocs, deleteDoc, doc, updateDoc } from 'firebase/firestore';
 import { deleteVehicleImages } from '../utils/vehicleService';
@@ -254,12 +255,12 @@ const HostDashboard = () => {
         {/* Tabs */}
         <div className="bg-white rounded-xl shadow-md mb-8">
           <div className="border-b border-gray-200">
-            <div className="flex space-x-8 px-6">
-              {['overview', 'vehicles', 'bookings'].map((tab) => (
+            <div className="flex space-x-8 px-6 overflow-x-auto">
+              {['overview', 'vehicles', 'bookings', 'calendar'].map((tab) => (
                 <button
                   key={tab}
                   onClick={() => setActiveTab(tab)}
-                  className={`py-4 px-2 border-b-2 font-medium text-sm transition-colors ${
+                  className={`py-4 px-2 border-b-2 font-medium text-sm transition-colors whitespace-nowrap ${
                     activeTab === tab
                       ? 'border-blue-600 text-blue-600'
                       : 'border-transparent text-gray-500 hover:text-gray-700'
@@ -436,7 +437,7 @@ const HostDashboard = () => {
               </div>
             )}
 
-            {/* Bookings */}
+            {/* Bookings Table */}
             {activeTab === 'bookings' && (
               <div>
                 <div className="flex justify-between items-center mb-4">
@@ -568,6 +569,32 @@ const HostDashboard = () => {
                         ))}
                       </tbody>
                     </table>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* Calendar Tab */}
+            {activeTab === 'calendar' && (
+              <div>
+                <h2 className="text-xl font-bold text-gray-900 mb-6">Vehicle Booking Calendars</h2>
+                {loading ? (
+                  <p className="text-gray-500 text-center py-10">Loading vehicles...</p>
+                ) : vehicles.length === 0 ? (
+                  <div className="text-center py-12">
+                    <Calendar className="w-16 h-16 text-gray-400 mx-auto mb-4" />
+                    <p className="text-gray-500 text-lg mb-2">No vehicles to display</p>
+                    <p className="text-gray-400 text-sm mb-6">Add a vehicle to see its booking calendar</p>
+                  </div>
+                ) : (
+                  <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                    {vehicles.map((vehicle) => (
+                      <BookingCalendar 
+                        key={vehicle.id} 
+                        vehicle={vehicle} 
+                        bookings={bookings}
+                      />
+                    ))}
                   </div>
                 )}
               </div>

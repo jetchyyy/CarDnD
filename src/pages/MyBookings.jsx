@@ -1,16 +1,18 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Calendar, MessageSquare, Car, Bike, MapPin, DollarSign } from 'lucide-react';
-import { auth } from '../firebase/firebase';
+import { Calendar, MessageSquare, Car, Bike, MapPin, DollarSign, Star } from 'lucide-react';
+import { auth, db } from '../firebase/firebase';
 import { collection, query, where, getDocs } from 'firebase/firestore';
-import { db } from '../firebase/firebase';
 import { createOrGetChat } from '../utils/chatService';
+import ReviewModal from '../components/ReviewModal';
 
 const MyBookings = () => {
   const navigate = useNavigate();
   const [bookings, setBookings] = useState([]);
   const [loading, setLoading] = useState(true);
   const [messagingLoading, setMessagingLoading] = useState(false);
+  const [selectedBookingForReview, setSelectedBookingForReview] = useState(null);
+  const [reviewedBookings, setReviewedBookings] = useState(new Set());
   const currentUser = auth.currentUser;
 
   useEffect(() => {
@@ -34,6 +36,17 @@ const MyBookings = () => {
         // Sort by created date, newest first
         fetchedBookings.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
         setBookings(fetchedBookings);
+
+        // Fetch which bookings have been reviewed
+        const reviewsQuery = query(
+          collection(db, 'reviews'),
+          where('guestId', '==', currentUser.uid)
+        );
+        const reviewsSnapshot = await getDocs(reviewsQuery);
+        const reviewedBookingIds = new Set(
+          reviewsSnapshot.docs.map(doc => doc.data().bookingId)
+        );
+        setReviewedBookings(reviewedBookingIds);
       } catch (error) {
         console.error('Error fetching bookings:', error);
       } finally {
@@ -60,6 +73,13 @@ const MyBookings = () => {
     }
   };
 
+  const handleReviewSuccess = () => {
+    // Add booking to reviewed set
+    if (selectedBookingForReview) {
+      setReviewedBookings(prev => new Set([...prev, selectedBookingForReview.id]));
+    }
+  };
+
   const getStatusColor = (status) => {
     const normalizedStatus = status?.toLowerCase();
     switch (normalizedStatus) {
@@ -78,12 +98,14 @@ const MyBookings = () => {
 
   const getBookingStatus = (booking) => {
     const now = new Date();
-    const startDate = new Date(booking.startDate);
     const endDate = new Date(booking.endDate);
 
     if (booking.status === 'cancelled') return 'cancelled';
     if (now > endDate) return 'completed';
-    if (now >= startDate && now <= endDate) return 'ongoing';
+    if (booking.status === 'confirmed') {
+      const startDate = new Date(booking.startDate);
+      if (now >= startDate && now <= endDate) return 'ongoing';
+    }
     return booking.status || 'pending';
   };
 
@@ -127,6 +149,8 @@ const MyBookings = () => {
               const startDate = new Date(booking.startDate);
               const endDate = new Date(booking.endDate);
               const days = Math.ceil((endDate - startDate) / (1000 * 60 * 60 * 24));
+              const isCompleted = status === 'completed';
+              const hasReviewed = reviewedBookings.has(booking.id);
 
               return (
                 <div
@@ -188,7 +212,7 @@ const MyBookings = () => {
                         </div>
                       </div>
 
-                      <div className="flex items-center justify-between pt-4 border-t border-gray-200">
+                      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between pt-4 border-t border-gray-200 gap-4">
                         <div className="flex items-center gap-2">
                           <DollarSign className="w-5 h-5 text-green-600" />
                           <div>
@@ -197,14 +221,33 @@ const MyBookings = () => {
                           </div>
                         </div>
 
-                        <button
-                          onClick={() => handleMessageHost(booking)}
-                          disabled={messagingLoading || booking.status === 'cancelled'}
-                          className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-400 text-white font-semibold px-6 py-3 rounded-lg transition-colors"
-                        >
-                          <MessageSquare className="w-5 h-5" />
-                          Message Host
-                        </button>
+                        <div className="flex gap-2 w-full sm:w-auto">
+                          {isCompleted && !hasReviewed && (
+                            <button
+                              onClick={() => setSelectedBookingForReview(booking)}
+                              className="flex items-center gap-2 bg-amber-600 hover:bg-amber-700 text-white font-semibold px-4 py-2 rounded-lg transition-colors whitespace-nowrap"
+                            >
+                              <Star className="w-4 h-4" />
+                              Leave Review
+                            </button>
+                          )}
+                          
+                          {isCompleted && hasReviewed && (
+                            <div className="flex items-center gap-2 px-4 py-2 bg-green-50 rounded-lg">
+                              <Star className="w-4 h-4 text-green-600 fill-green-600" />
+                              <span className="text-sm font-medium text-green-700">Review submitted</span>
+                            </div>
+                          )}
+
+                          <button
+                            onClick={() => handleMessageHost(booking)}
+                            disabled={messagingLoading || booking.status === 'cancelled'}
+                            className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-400 text-white font-semibold px-4 py-2 rounded-lg transition-colors whitespace-nowrap"
+                          >
+                            <MessageSquare className="w-4 h-4" />
+                            Message
+                          </button>
+                        </div>
                       </div>
                     </div>
                   </div>
@@ -214,6 +257,15 @@ const MyBookings = () => {
           </div>
         )}
       </div>
+
+      {/* Review Modal */}
+      {selectedBookingForReview && (
+        <ReviewModal
+          booking={selectedBookingForReview}
+          onClose={() => setSelectedBookingForReview(null)}
+          onSuccess={handleReviewSuccess}
+        />
+      )}
     </div>
   );
 };
