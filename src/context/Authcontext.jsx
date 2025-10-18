@@ -5,10 +5,13 @@ import {
   signOut,
   signInWithPopup,
   GoogleAuthProvider,
-  onAuthStateChanged
+  onAuthStateChanged,
+  setPersistence,
+  browserLocalPersistence
 } from 'firebase/auth';
 import { doc, getDoc, setDoc, updateDoc } from 'firebase/firestore';
 import { auth, db } from '../firebase/firebase';
+import { logoutSession } from '../utils/Session';
 
 const AuthContext = createContext();
 
@@ -25,14 +28,18 @@ export const AuthProvider = ({ children }) => {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    
     // Listen to Firebase auth state changes
     const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
+    
       if (firebaseUser) {
         try {
           // Fetch user document from Firestore
           const userDoc = await getDoc(doc(db, 'users', firebaseUser.uid));
           if (userDoc.exists()) {
             setUser(userDoc.data());
+            setLoading(false)
+            
           } else {
             // If user document doesn't exist, create a basic one
             const newUser = createUserDocument(
@@ -55,8 +62,17 @@ export const AuthProvider = ({ children }) => {
       setLoading(false);
     });
 
-    // Cleanup subscription
-    return () => unsubscribe();
+    const interval = setInterval(async()=>{
+      await logoutSession()
+     
+    },6000)
+    // Cleanup subscription and checking of auth
+    return () => {
+      unsubscribe();
+      clearInterval(interval)
+
+    }
+
   }, []);
 
   // Helper function to create user document structure
@@ -73,6 +89,7 @@ export const AuthProvider = ({ children }) => {
 
   const login = async (email, password) => {
     try {
+      await setPersistence(auth,browserLocalPersistence)
       const userCredential = await signInWithEmailAndPassword(auth, email, password);
       const userDoc = await getDoc(doc(db, 'users', userCredential.user.uid));
       
@@ -114,6 +131,7 @@ export const AuthProvider = ({ children }) => {
     try {
       await signOut(auth);
       setUser(null);
+      localStorage.removeItem("Session")
       return { success: true };
     } catch (error) {
       console.error('Logout error:', error);

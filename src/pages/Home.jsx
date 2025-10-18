@@ -1,15 +1,80 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
-import { Search, Car, Shield, DollarSign, Clock, MapPin, Calendar } from 'lucide-react';
+import { Search, Car, Shield, DollarSign, Clock, MapPin, Calendar, Star } from 'lucide-react';
+import { db } from '../firebase/firebase';
+import { collection, getDocs, query, where } from 'firebase/firestore';
 
 const Home = () => {
   const navigate = useNavigate();
+  const [featuredVehicles, setFeaturedVehicles] = useState([]);
+  const [loadingVehicles, setLoadingVehicles] = useState(true);
   const [searchData, setSearchData] = useState({
     location: '',
     pickupDate: '',
     returnDate: '',
     vehicleType: 'all'
   });
+
+  // Fetch vehicles and their reviews to display by highest rating
+  useEffect(() => {
+    const fetchFeaturedVehicles = async () => {
+      setLoadingVehicles(true);
+      try {
+        const vehiclesRef = collection(db, 'vehicles');
+        const vehiclesSnapshot = await getDocs(vehiclesRef);
+        const vehiclesData = vehiclesSnapshot.docs.map(doc => ({
+          id: doc.id,
+          ...doc.data()
+        }));
+
+        // Fetch reviews for each vehicle
+        const vehiclesWithRatings = await Promise.all(
+          vehiclesData.map(async (vehicle) => {
+            try {
+              const reviewsRef = collection(db, 'reviews');
+              const q = query(reviewsRef, where('carId', '==', vehicle.id));
+              const reviewsSnapshot = await getDocs(q);
+              const reviews = reviewsSnapshot.docs.map(doc => doc.data());
+              
+              // Calculate average rating
+              let averageRating = 0;
+              if (reviews.length > 0) {
+                averageRating = (
+                  reviews.reduce((sum, r) => sum + (r.rating || 0), 0) / reviews.length
+                ).toFixed(1);
+              }
+
+              return {
+                ...vehicle,
+                rating: parseFloat(averageRating),
+                reviewCount: reviews.length
+              };
+            } catch (error) {
+              console.error(`Error fetching reviews for vehicle ${vehicle.id}:`, error);
+              return {
+                ...vehicle,
+                rating: 0,
+                reviewCount: 0
+              };
+            }
+          })
+        );
+
+        // Sort by rating (highest first) and limit to 4
+        const topRated = vehiclesWithRatings
+          .sort((a, b) => b.rating - a.rating)
+          .slice(0, 4);
+
+        setFeaturedVehicles(topRated);
+      } catch (error) {
+        console.error('Error fetching vehicles:', error);
+      } finally {
+        setLoadingVehicles(false);
+      }
+    };
+
+    fetchFeaturedVehicles();
+  }, []);
 
   const handleSearch = (e) => {
     e.preventDefault();
@@ -24,49 +89,6 @@ const Home = () => {
     // Navigate to vehicles page with search params
     navigate(`/vehicles?${params.toString()}`);
   };
-
-  const featuredVehicles = [
-    {
-      id: 1,
-      name: 'Tesla Model 3',
-      type: 'car',
-      image: 'https://images.unsplash.com/photo-1560958089-b8a1929cea89?w=800',
-      price: 89,
-      rating: 4.9,
-      trips: 124,
-      location: 'Cebu City'
-    },
-    {
-      id: 2,
-      name: 'Honda Civic',
-      type: 'car',
-      image: 'https://images.unsplash.com/photo-1590362891991-f776e747a588?w=800',
-      price: 45,
-      rating: 4.8,
-      trips: 89,
-      location: 'Mandaue City'
-    },
-    {
-      id: 3,
-      name: 'Yamaha NMAX',
-      type: 'motorcycle',
-      image: 'https://images.unsplash.com/photo-1558981806-ec527fa84c39?w=800',
-      price: 25,
-      rating: 4.7,
-      trips: 156,
-      location: 'Cebu City'
-    },
-    {
-      id: 4,
-      name: 'Honda Click 150i',
-      type: 'motorcycle',
-      image: 'https://images.unsplash.com/photo-1568772585407-9361f9bf3a87?w=800',
-      price: 20,
-      rating: 4.6,
-      trips: 98,
-      location: 'Lapu-Lapu City'
-    }
-  ];
 
   const features = [
     {
@@ -85,6 +107,19 @@ const Home = () => {
       description: 'Round-the-clock customer support whenever you need help'
     }
   ];
+
+  const renderStars = (rating) => {
+    return [...Array(5)].map((_, i) => (
+      <Star
+        key={i}
+        className={`w-4 h-4 ${
+          i < Math.round(rating)
+            ? 'text-yellow-500 fill-current'
+            : 'text-gray-300'
+        }`}
+      />
+    ));
+  };
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -184,47 +219,60 @@ const Home = () => {
       <div className="bg-white py-16">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <h2 className="text-3xl font-bold text-gray-900 mb-8">Featured Vehicles</h2>
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-            {featuredVehicles.map((vehicle) => (
-              <Link 
-                key={vehicle.id} 
-                to={`/vehicles/${vehicle.id}`}
-                className="bg-white rounded-lg shadow-md overflow-hidden hover:shadow-xl transition-shadow cursor-pointer"
-              >
-                <div className="relative h-48">
-                  <img
-                    src={vehicle.image}
-                    alt={vehicle.name}
-                    className="w-full h-full object-cover"
-                  />
-                  <div className="absolute top-2 right-2 bg-white px-3 py-1 rounded-full text-sm font-semibold text-gray-900 flex items-center gap-1">
-                    {vehicle.type === 'car' ? <Car className="w-4 h-4" /> : <span>🏍️</span>}
-                    <span>{vehicle.type}</span>
-                  </div>
-                </div>
-                <div className="p-4">
-                  <h3 className="font-semibold text-lg text-gray-900 mb-2">{vehicle.name}</h3>
-                  <div className="flex items-center text-sm text-gray-600 mb-2">
-                    <MapPin className="w-4 h-4 mr-1" />
-                    {vehicle.location}
-                  </div>
-                  <div className="flex items-center justify-between mb-3">
-                    <div className="flex items-center">
-                      <span className="text-yellow-500 mr-1">★</span>
-                      <span className="font-medium text-gray-900">{vehicle.rating}</span>
-                      <span className="text-gray-500 text-sm ml-1">({vehicle.trips} trips)</span>
+          
+          {loadingVehicles ? (
+            <div className="flex justify-center items-center py-12">
+              <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
+            </div>
+          ) : featuredVehicles.length > 0 ? (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+              {featuredVehicles.map((vehicle) => (
+                <Link 
+                  key={vehicle.id} 
+                  to={`/vehicles/${vehicle.id}`}
+                  className="bg-white rounded-lg shadow-md overflow-hidden hover:shadow-xl transition-shadow cursor-pointer"
+                >
+                  <div className="relative h-48">
+                    <img
+                      src={vehicle.images?.[0] || 'https://via.placeholder.com/400x300?text=No+Image'}
+                      alt={vehicle.title}
+                      className="w-full h-full object-cover"
+                    />
+                    <div className="absolute top-2 right-2 bg-white px-3 py-1 rounded-full text-sm font-semibold text-gray-900 flex items-center gap-1">
+                      {vehicle.type === 'car' ? <Car className="w-4 h-4" /> : <span>🏍️</span>}
+                      <span className="capitalize">{vehicle.type}</span>
                     </div>
                   </div>
-                  <div className="pt-3 border-t border-gray-200">
-                    <div className="flex items-center justify-between">
-                      <span className="text-2xl font-bold text-gray-900">₱{vehicle.price}</span>
-                      <span className="text-gray-600 text-sm">/day</span>
+                  <div className="p-4">
+                    <h3 className="font-semibold text-lg text-gray-900 mb-2">{vehicle.title || `${vehicle.specifications?.brand} ${vehicle.specifications?.model}`}</h3>
+                    <div className="flex items-center text-sm text-gray-600 mb-2">
+                      <MapPin className="w-4 h-4 mr-1" />
+                      {vehicle.location}
+                    </div>
+                    <div className="flex items-center justify-between mb-3">
+                      <div className="flex items-center gap-2">
+                        <div className="flex gap-1">
+                          {renderStars(vehicle.rating)}
+                        </div>
+                        <span className="font-medium text-gray-900">{vehicle.rating}</span>
+                        <span className="text-gray-500 text-sm">({vehicle.reviewCount})</span>
+                      </div>
+                    </div>
+                    <div className="pt-3 border-t border-gray-200">
+                      <div className="flex items-center justify-between">
+                        <span className="text-2xl font-bold text-gray-900">₱{vehicle.pricePerDay}</span>
+                        <span className="text-gray-600 text-sm">/day</span>
+                      </div>
                     </div>
                   </div>
-                </div>
-              </Link>
-            ))}
-          </div>
+                </Link>
+              ))}
+            </div>
+          ) : (
+            <div className="text-center py-12">
+              <p className="text-gray-600 text-lg">No vehicles available at the moment</p>
+            </div>
+          )}
         </div>
       </div>
 

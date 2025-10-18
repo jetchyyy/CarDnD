@@ -14,6 +14,7 @@ export default function AdminPanel() {
     { label: 'Users', path: '/admin/users', icon: Users },
     { label: 'Listings', path: '/admin/listings', icon: Car },
     { label: 'Bookings', path: '/admin/bookings', icon: Calendar },
+    { label: 'Payouts', path: '/admin/payouts', icon: CreditCard },
     { label: 'Transactions', path: '/admin/transactions', icon: CreditCard },
     { label: 'Settings', path: '/admin/settings', icon: Settings },
   ];
@@ -29,7 +30,7 @@ export default function AdminPanel() {
         } bg-gray-900 text-white transition-all duration-300 fixed h-screen overflow-y-auto`}
       >
         <div className="flex items-center justify-between p-4 border-b border-gray-700">
-          {sidebarOpen && <h1 className="text-xl font-bold">Admin</h1>}
+          {sidebarOpen && <h1 className="text-xl font-bold">Admin Dashboard</h1>}
           <button
             onClick={() => setSidebarOpen(!sidebarOpen)}
             className="p-2 hover:bg-gray-800 rounded"

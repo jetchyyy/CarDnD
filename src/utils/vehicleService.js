@@ -25,7 +25,7 @@ export const uploadVehicleImages = async (images, vehicleId) => {
     } catch (error) {
       console.error('Error uploading image:', error);
       throw new Error(`Failed to upload image ${i + 1}`);
-    }
+    } 
   }
   
   return imageUrls;

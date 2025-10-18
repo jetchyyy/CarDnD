@@ -10,7 +10,8 @@ import {
   Loader2
 } from 'lucide-react';
 import { auth } from '../firebase/firebase';
-import { createBooking, checkAvailability } from '../utils/bookingService';
+import { createBooking, checkAvailability, uploadPayment } from '../utils/bookingService';
+import PaymentModal from '../components/PaymentModal';
 
 const BookingConfirmation = () => {
   const { id } = useParams();
@@ -19,6 +20,10 @@ const BookingConfirmation = () => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [isChecking, setIsChecking] = useState(true);
+  const [showPayment, setShowPayment] = useState(false);
+
+  const qrCodeUrl = "Images"
+
 
   const { vehicle, bookingDates, totalPrice } = location.state || {};
 
@@ -67,7 +72,7 @@ const BookingConfirmation = () => {
     return Math.ceil(diffTime / (1000 * 60 * 60 * 24));
   };
 
-  const handleConfirmBooking = async () => {
+  const handleConfirmBooking = async (proof) => {
     const currentUser = auth.currentUser;
     if (!currentUser) {
       navigate('/login');
@@ -90,7 +95,9 @@ const BookingConfirmation = () => {
         setLoading(false);
         return;
       }
-
+       const paymentId = `${currentUser.uid}_${Date.now()}`;
+       const imageUrls = await uploadPayment(proof, paymentId);
+       
       const bookingData = {
         carId: vehicle.id,
         guestId: currentUser.uid,
@@ -103,6 +110,8 @@ const BookingConfirmation = () => {
         vehicleImage: vehicle.images?.[0] || '',
         guestName: currentUser.displayName || currentUser.email?.split('@')[0] || 'Guest',
         guestEmail: currentUser.email,
+        paymentReceipt: imageUrls[0],
+
       };
 
       const bookingId = await createBooking(bookingData);
@@ -135,6 +144,12 @@ const BookingConfirmation = () => {
   }
 
   const days = calculateDays();
+  
+  const serviceFee = totalPrice * 0.05;
+  const formattedServiceFee = serviceFee.toLocaleString("en-PH", {
+    style: "currency",
+    currency: "PHP",
+  });
 
   return (
     <div className="min-h-screen bg-gray-50 py-12">
@@ -268,19 +283,19 @@ const BookingConfirmation = () => {
                   </div>
                   <div className="flex justify-between text-gray-600">
                     <span>Service fee</span>
-                    <span>₱0</span>
+                    <span>{formattedServiceFee}</span>
                   </div>
                 </div>
 
                 <div className="border-t border-gray-200 pt-4 mb-6">
                   <div className="flex justify-between text-lg font-bold text-gray-900">
                     <span>Total</span>
-                    <span>₱{totalPrice}</span>
+                    <span>₱{totalPrice + serviceFee}</span>
                   </div>
                 </div>
 
                 <button
-                  onClick={handleConfirmBooking}
+                  onClick={()=>setShowPayment(true)}
                   disabled={loading || error}
                   className="w-full bg-blue-600 hover:bg-blue-700 disabled:bg-gray-400 text-white font-semibold py-3 rounded-lg transition-colors flex items-center justify-center space-x-2 mb-4"
                 >
@@ -316,8 +331,17 @@ const BookingConfirmation = () => {
               </div>
             </div>
           </div>
-        )}
+          
+        )}   
       </div>
+      <PaymentModal
+      isOpen={showPayment}
+      onClose={() => setShowPayment(false)}
+      amount={totalPrice + serviceFee}
+      qrCodeUrl={qrCodeUrl}
+      onUploadProof={handleConfirmBooking}
+      />
+            
     </div>
   );
 };

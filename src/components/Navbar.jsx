@@ -1,13 +1,65 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { Car, Menu, X, User, LogOut, Settings, LayoutDashboard, PlusCircle, Calendar } from 'lucide-react';
+import { Car, Menu, X, User, LogOut, Settings, LayoutDashboard, PlusCircle, Calendar, MessageCircle } from 'lucide-react';
 import { useAuth } from '../context/Authcontext';
+import { listenToUserChats, getUnreadMessageCount } from '../utils/chatService';
 
 const Navbar = () => {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [isUserMenuOpen, setIsUserMenuOpen] = useState(false);
   const { user, logout } = useAuth();
   const navigate = useNavigate();
+  const [unreadCount, setUnreadCount] = useState(0);
+  const [previousUnreadCount, setPreviousUnreadCount] = useState(0);
+
+  // Request notification permission on mount
+  useEffect(() => {
+    if ('Notification' in window && Notification.permission === 'default') {
+      Notification.requestPermission();
+    }
+  }, []);
+
+  // Listen to user's chats for unread messages
+  useEffect(() => {
+    if (!user) {
+      setUnreadCount(0);
+      return;
+    }
+
+    let unsubscribe;
+    const userId = user.userId;
+    
+    if (!userId) {
+      return;
+    }
+    
+    try {
+      unsubscribe = listenToUserChats(userId, (chats) => {
+        const count = getUnreadMessageCount(userId, chats);
+        
+        // Send browser notification if unread count increased
+        if (count > previousUnreadCount && 'Notification' in window && Notification.permission === 'granted') {
+          const newMessages = count - previousUnreadCount;
+          new Notification('New Message', {
+            body: `You have ${newMessages} new message${newMessages > 1 ? 's' : ''}`,
+            icon: '/favicon.ico', // Replace with your app icon
+            tag: 'new-message', // Prevents duplicate notifications
+          });
+        }
+        
+        setUnreadCount(count);
+        setPreviousUnreadCount(count);
+      });
+    } catch (error) {
+      console.error('Error listening to chats:', error);
+    }
+
+    return () => {
+      if (unsubscribe) {
+        unsubscribe();
+      }
+    };
+  }, [user, previousUnreadCount, unreadCount]);
 
   const toggleMenu = () => setIsMenuOpen(!isMenuOpen);
   const toggleUserMenu = () => setIsUserMenuOpen(!isUserMenuOpen);
@@ -53,6 +105,19 @@ const Navbar = () => {
             >
               Become a Host
             </button>
+            {user && (
+              <Link 
+                to="/chats" 
+                className="relative text-gray-700 hover:text-blue-600 font-medium transition-colors flex items-center gap-2"
+              >
+                <MessageCircle className="w-5 h-5" />
+                {unreadCount > 0 && (
+                  <span className="absolute -top-2 -right-3 bg-red-500 text-white text-xs font-bold rounded-full w-5 h-5 flex items-center justify-center animate-pulse">
+                    {unreadCount > 9 ? '9+' : unreadCount}
+                  </span>
+                )}
+              </Link>
+            )}
           </div>
 
           {/* Right Side - Auth Buttons */}
@@ -97,9 +162,24 @@ const Navbar = () => {
                       <Calendar className="w-4 h-4 text-gray-600" />
                       <span className="text-gray-700">My Bookings</span>
                     </Link>
+
+                    <Link 
+                      to="/chats" 
+                      onClick={() => setIsUserMenuOpen(false)}
+                      className="w-full text-left px-4 py-2 hover:bg-gray-100 flex items-center space-x-3 relative"
+                    >
+                      <MessageCircle className="w-4 h-4 text-gray-600" />
+                      <span className="text-gray-700">Messages</span>
+                      {unreadCount > 0 && (
+                        <span className="ml-auto bg-red-500 text-white text-xs font-bold rounded-full w-5 h-5 flex items-center justify-center animate-pulse">
+                          {unreadCount > 9 ? '9+' : unreadCount}
+                        </span>
+                      )}
+                    </Link>
                     
                     {user.role === 'host' && (
                       <>
+                        <hr className="my-2" />
                         <Link 
                           to="/host/dashboard" 
                           onClick={() => setIsUserMenuOpen(false)}
@@ -199,9 +279,24 @@ const Navbar = () => {
                     <Calendar className="w-4 h-4" />
                     <span>My Bookings</span>
                   </Link>
+
+                  <Link 
+                    to="/chats" 
+                    onClick={toggleMenu}
+                    className="text-gray-700 hover:text-blue-600 font-medium text-left flex items-center space-x-2 relative"
+                  >
+                    <MessageCircle className="w-4 h-4" />
+                    <span>Messages</span>
+                    {unreadCount > 0 && (
+                      <span className="ml-auto bg-red-500 text-white text-xs font-bold rounded-full w-5 h-5 flex items-center justify-center animate-pulse">
+                        {unreadCount > 9 ? '9+' : unreadCount}
+                      </span>
+                    )}
+                  </Link>
                   
                   {user.role === 'host' && (
                     <>
+                      <hr className="my-2" />
                       <Link 
                         to="/host/dashboard" 
                         onClick={toggleMenu}
