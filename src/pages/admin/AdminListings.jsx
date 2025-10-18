@@ -23,14 +23,14 @@ export default function AdminListings() {
 
   const fetchListings = async () => {
     try {
-      const listingsSnap = await getDocs(collection(db, 'listings'));
+      const listingsSnap = await getDocs(collection(db, 'vehicles'));
       const listingsData = listingsSnap.docs.map(doc => ({
         id: doc.id,
         ...doc.data(),
       }));
       setListings(listingsData.sort((a, b) => {
-        const dateA = a.createdAt?.toDate?.() || new Date(0);
-        const dateB = b.createdAt?.toDate?.() || new Date(0);
+        const dateA = a.createdAt ? new Date(a.createdAt) : new Date(0);
+        const dateB = b.createdAt ? new Date(b.createdAt) : new Date(0);
         return dateB - dateA;
       }));
       setLoading(false);
@@ -44,20 +44,20 @@ export default function AdminListings() {
     let filtered = listings;
 
     if (statusFilter !== 'all') {
-      filtered = filtered.filter(l => (l.status || 'pending') === statusFilter);
+      filtered = filtered.filter(l => (l.status || 'available') === statusFilter);
     }
 
     if (vehicleTypeFilter !== 'all') {
-      filtered = filtered.filter(l => l.vehicleType === vehicleTypeFilter);
+      filtered = filtered.filter(l => l.type === vehicleTypeFilter);
     }
 
     if (search) {
       filtered = filtered.filter(l =>
-        l.brand?.toLowerCase().includes(search.toLowerCase()) ||
-        l.model?.toLowerCase().includes(search.toLowerCase()) ||
-        l.hostName?.toLowerCase().includes(search.toLowerCase()) ||
+        l.specifications?.brand?.toLowerCase().includes(search.toLowerCase()) ||
+        l.specifications?.model?.toLowerCase().includes(search.toLowerCase()) ||
+        l.owner?.toLowerCase().includes(search.toLowerCase()) ||
         l.location?.toLowerCase().includes(search.toLowerCase()) ||
-        l.plateNumber?.toLowerCase().includes(search.toLowerCase())
+        l.specifications?.plateNumber?.toLowerCase().includes(search.toLowerCase())
       );
     }
 
@@ -66,9 +66,9 @@ export default function AdminListings() {
 
   const handleApprove = async (listingId) => {
     try {
-      await updateDoc(doc(db, 'listings', listingId), {
+      await updateDoc(doc(db, 'vehicles', listingId), {
         status: 'approved',
-        approvedAt: new Date(),
+        approvedAt: new Date().toISOString(),
       });
       fetchListings();
       alert('Listing approved successfully');
@@ -80,9 +80,9 @@ export default function AdminListings() {
 
   const handleReject = async (listingId) => {
     try {
-      await updateDoc(doc(db, 'listings', listingId), {
+      await updateDoc(doc(db, 'vehicles', listingId), {
         status: 'rejected',
-        rejectedAt: new Date(),
+        rejectedAt: new Date().toISOString(),
       });
       fetchListings();
       alert('Listing rejected');
@@ -95,7 +95,7 @@ export default function AdminListings() {
   const handleDelete = async (listingId) => {
     if (!window.confirm('Are you sure you want to delete this listing?')) return;
     try {
-      await deleteDoc(doc(db, 'listings', listingId));
+      await deleteDoc(doc(db, 'vehicles', listingId));
       fetchListings();
       alert('Listing deleted successfully');
     } catch (error) {
@@ -105,17 +105,20 @@ export default function AdminListings() {
   };
 
   const getStatusBadge = (status) => {
-    const defaultStatus = status || 'pending';
+    const defaultStatus = status || 'available';
     const badges = {
+      available: { bg: 'bg-green-100', text: 'text-green-800', icon: CheckCircle },
       pending: { bg: 'bg-yellow-100', text: 'text-yellow-800', icon: Clock },
-      approved: { bg: 'bg-green-100', text: 'text-green-800', icon: CheckCircle },
+      approved: { bg: 'bg-blue-100', text: 'text-blue-800', icon: CheckCircle },
       rejected: { bg: 'bg-red-100', text: 'text-red-800', icon: XCircle },
     };
-    return badges[defaultStatus] || badges.pending;
+    return badges[defaultStatus] || badges.available;
   };
 
   const getVehicleTitle = (listing) => {
-    return `${listing.brand || ''} ${listing.model || ''}`.trim() || 'Untitled';
+    const brand = listing.specifications?.brand || '';
+    const model = listing.specifications?.model || '';
+    return `${brand} ${model}`.trim() || listing.title || 'Untitled';
   };
 
   const getVehicleTypeDisplay = (vehicleType) => {
@@ -145,6 +148,7 @@ export default function AdminListings() {
             className="px-4 py-2 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-500"
           >
             <option value="all">All Status</option>
+            <option value="available">Available</option>
             <option value="pending">Pending</option>
             <option value="approved">Approved</option>
             <option value="rejected">Rejected</option>
@@ -206,25 +210,25 @@ export default function AdminListings() {
                         )}
                         <div>
                           <p className="font-semibold text-gray-900">{getVehicleTitle(listing)}</p>
-                          <p className="text-xs text-gray-500">{listing.year || 'N/A'}</p>
-                          {listing.plateNumber && (
-                            <p className="text-xs text-gray-500 font-mono">{listing.plateNumber}</p>
+                          <p className="text-xs text-gray-500">{listing.specifications?.year || 'N/A'}</p>
+                          {listing.specifications?.plateNumber && (
+                            <p className="text-xs text-gray-500 font-mono">{listing.specifications.plateNumber}</p>
                           )}
                         </div>
                       </div>
                     </td>
                     <td className="px-6 py-4 text-sm">
                       <span className="bg-blue-100 text-blue-800 px-2 py-1 rounded text-xs font-semibold">
-                        {getVehicleTypeDisplay(listing.vehicleType)}
+                        {getVehicleTypeDisplay(listing.type)}
                       </span>
                     </td>
-                    <td className="px-6 py-4 text-sm">{listing.hostName || 'Unknown'}</td>
+                    <td className="px-6 py-4 text-sm">{listing.owner || 'Unknown'}</td>
                     <td className="px-6 py-4 text-sm">{listing.location || 'N/A'}</td>
                     <td className="px-6 py-4 font-semibold">₱{listing.pricePerDay || 0}</td>
                     <td className="px-6 py-4">
                       <div className={`flex items-center gap-2 ${badgeStyle.bg} ${badgeStyle.text} px-3 py-1 rounded-full text-xs font-semibold w-fit`}>
                         <StatusIcon size={16} />
-                        {(listing.status || 'pending').charAt(0).toUpperCase() + (listing.status || 'pending').slice(1)}
+                        {(listing.status || 'available').charAt(0).toUpperCase() + (listing.status || 'available').slice(1)}
                       </div>
                     </td>
                     <td className="px-6 py-4 text-center">
@@ -236,7 +240,7 @@ export default function AdminListings() {
                         >
                           <Eye size={18} />
                         </button>
-                        {(listing.status || 'pending') === 'pending' && (
+                        {(listing.status || 'available') === 'pending' && (
                           <>
                             <button
                               onClick={() => handleApprove(listing.id)}
@@ -304,7 +308,7 @@ export default function AdminListings() {
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
                 <div>
                   <p className="text-sm text-gray-500">Vehicle Type</p>
-                  <p className="font-semibold">{getVehicleTypeDisplay(selectedListing.vehicleType)}</p>
+                  <p className="font-semibold">{getVehicleTypeDisplay(selectedListing.type)}</p>
                 </div>
                 <div>
                   <p className="text-sm text-gray-500">Brand & Model</p>
@@ -312,15 +316,15 @@ export default function AdminListings() {
                 </div>
                 <div>
                   <p className="text-sm text-gray-500">Year</p>
-                  <p className="font-semibold">{selectedListing.year || 'N/A'}</p>
+                  <p className="font-semibold">{selectedListing.specifications?.year || 'N/A'}</p>
                 </div>
                 <div>
                   <p className="text-sm text-gray-500">Plate Number</p>
-                  <p className="font-semibold font-mono">{selectedListing.plateNumber || 'N/A'}</p>
+                  <p className="font-semibold font-mono">{selectedListing.specifications?.plateNumber || 'N/A'}</p>
                 </div>
                 <div>
                   <p className="text-sm text-gray-500">Host</p>
-                  <p className="font-semibold">{selectedListing.hostName || 'Unknown'}</p>
+                  <p className="font-semibold">{selectedListing.owner || 'Unknown'}</p>
                 </div>
                 <div>
                   <p className="text-sm text-gray-500">Location</p>
@@ -332,41 +336,41 @@ export default function AdminListings() {
                 </div>
                 <div>
                   <p className="text-sm text-gray-500">Status</p>
-                  <p className="font-semibold">{(selectedListing.status || 'pending').charAt(0).toUpperCase() + (selectedListing.status || 'pending').slice(1)}</p>
+                  <p className="font-semibold">{(selectedListing.status || 'available').charAt(0).toUpperCase() + (selectedListing.status || 'available').slice(1)}</p>
                 </div>
-                {selectedListing.vehicleType === 'car' && (
+                {selectedListing.type === 'car' && (
                   <>
                     <div>
                       <p className="text-sm text-gray-500">Transmission</p>
-                      <p className="font-semibold capitalize">{selectedListing.transmission || 'N/A'}</p>
+                      <p className="font-semibold capitalize">{selectedListing.specifications?.transmission || 'N/A'}</p>
                     </div>
                     <div>
                       <p className="text-sm text-gray-500">Fuel Type</p>
-                      <p className="font-semibold capitalize">{selectedListing.fuelType || 'N/A'}</p>
+                      <p className="font-semibold capitalize">{selectedListing.specifications?.fuelType || 'N/A'}</p>
                     </div>
                     <div>
                       <p className="text-sm text-gray-500">Seats</p>
-                      <p className="font-semibold">{selectedListing.seats || 'N/A'}</p>
+                      <p className="font-semibold">{selectedListing.specifications?.seats || 'N/A'}</p>
                     </div>
                     <div>
                       <p className="text-sm text-gray-500">Body Type</p>
-                      <p className="font-semibold capitalize">{selectedListing.type || 'N/A'}</p>
+                      <p className="font-semibold capitalize">{selectedListing.specifications?.type || 'N/A'}</p>
                     </div>
                   </>
                 )}
-                {selectedListing.vehicleType === 'motorcycle' && (
+                {selectedListing.type === 'motorcycle' && (
                   <>
                     <div>
                       <p className="text-sm text-gray-500">Transmission</p>
-                      <p className="font-semibold capitalize">{selectedListing.transmission || 'N/A'}</p>
+                      <p className="font-semibold capitalize">{selectedListing.specifications?.transmission || 'N/A'}</p>
                     </div>
                     <div>
                       <p className="text-sm text-gray-500">Engine Size</p>
-                      <p className="font-semibold">{selectedListing.engineSize ? `${selectedListing.engineSize}cc` : 'N/A'}</p>
+                      <p className="font-semibold">{selectedListing.specifications?.engineSize ? `${selectedListing.specifications.engineSize}cc` : 'N/A'}</p>
                     </div>
                     <div>
                       <p className="text-sm text-gray-500">Type</p>
-                      <p className="font-semibold capitalize">{selectedListing.type || 'N/A'}</p>
+                      <p className="font-semibold capitalize">{selectedListing.specifications?.type || 'N/A'}</p>
                     </div>
                   </>
                 )}
@@ -396,7 +400,7 @@ export default function AdminListings() {
 
               {/* Action Buttons */}
               <div className="flex space-x-3 pt-4 border-t">
-                {(selectedListing.status || 'pending') === 'pending' && (
+                {(selectedListing.status || 'available') === 'pending' && (
                   <>
                     <button
                       onClick={() => {
@@ -434,13 +438,19 @@ export default function AdminListings() {
       <div className="bg-white rounded-lg shadow p-6">
         <h3 className="text-lg font-bold text-gray-800 mb-4">Listings Summary</h3>
         <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
+          <div className="border-l-4 border-green-500 pl-4 py-2">
+            <p className="text-gray-600 text-sm">Available</p>
+            <p className="text-2xl font-bold">
+              {listings.filter(l => (l.status || 'available') === 'available').length}
+            </p>
+          </div>
           <div className="border-l-4 border-yellow-500 pl-4 py-2">
             <p className="text-gray-600 text-sm">Pending</p>
             <p className="text-2xl font-bold">
-              {listings.filter(l => (l.status || 'pending') === 'pending').length}
+              {listings.filter(l => l.status === 'pending').length}
             </p>
           </div>
-          <div className="border-l-4 border-green-500 pl-4 py-2">
+          <div className="border-l-4 border-blue-500 pl-4 py-2">
             <p className="text-gray-600 text-sm">Approved</p>
             <p className="text-2xl font-bold">
               {listings.filter(l => l.status === 'approved').length}
@@ -452,16 +462,10 @@ export default function AdminListings() {
               {listings.filter(l => l.status === 'rejected').length}
             </p>
           </div>
-          <div className="border-l-4 border-blue-500 pl-4 py-2">
-            <p className="text-gray-600 text-sm">Cars</p>
-            <p className="text-2xl font-bold">
-              {listings.filter(l => l.vehicleType === 'car').length}
-            </p>
-          </div>
           <div className="border-l-4 border-purple-500 pl-4 py-2">
-            <p className="text-gray-600 text-sm">Motorcycles</p>
+            <p className="text-gray-600 text-sm">Total Vehicles</p>
             <p className="text-2xl font-bold">
-              {listings.filter(l => l.vehicleType === 'motorcycle').length}
+              {listings.length}
             </p>
           </div>
         </div>

@@ -160,7 +160,7 @@ const BookingSuccess = () => {
         {/* Action Buttons */}
         <div className="flex flex-col sm:flex-row gap-4">
           <button
-            onClick={() => navigate('/bookings')}
+            onClick={() => navigate('/my-bookings')}
             className="flex-1 flex items-center justify-center space-x-2 bg-blue-600 hover:bg-blue-700 text-white font-semibold py-3 rounded-lg transition-colors"
           >
             <FileText className="w-5 h-5" />

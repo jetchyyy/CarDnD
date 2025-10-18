@@ -30,6 +30,7 @@ import AdminListings from './pages/admin/AdminListings';
 import AdminBookings from './pages/admin/AdminBookings';
 import AdminTransactions from './pages/admin/AdminTransactions';
 import AdminSettings from './pages/admin/AdminSettings';
+import AdminPayouts from './pages/admin/AdminPayouts';
 
 // Protected Route Component for Admin
 const ProtectedAdminRoute = ({ children }) => {
@@ -106,6 +107,7 @@ function App() {
           <Route path="/my-bookings" element={<MainLayout><MyBookings /></MainLayout>} />
           <Route path="/chats" element={<MainLayout><ChatsList /></MainLayout>} />
           <Route path="/chat/:chatId" element={<MainLayout><Chat /></MainLayout>} />
+          <Route path="/messages/:chatId" element={<MainLayout><Chat /></MainLayout>} />
           <Route path="/host/dashboard" element={<MainLayout><HostDashboard /></MainLayout>} />
           <Route path="/host/add-car" element={<MainLayout><AddCar /></MainLayout>} />
           <Route path="/host/add-motorcycle" element={<MainLayout><AddMotorcycle /></MainLayout>} />
@@ -119,6 +121,7 @@ function App() {
             <Route path="bookings" element={<AdminBookings />} />
             <Route path="transactions" element={<AdminTransactions />} />
             <Route path="settings" element={<AdminSettings />} />
+            <Route path="payouts" element={<AdminPayouts />} />
           </Route>
         </Routes>
       </Router>
