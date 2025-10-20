@@ -7,13 +7,17 @@ import {
   GoogleAuthProvider,
   onAuthStateChanged,
   setPersistence,
-  browserLocalPersistence
+  browserLocalPersistence,
+  signInWithCustomToken,
 } from 'firebase/auth';
 import { doc, getDoc, setDoc, updateDoc } from 'firebase/firestore';
 import { auth, db } from '../firebase/firebase';
 import { logoutSession } from '../utils/Session';
+import { httpsCallable } from 'firebase/functions';
+import { functions } from '../firebase/firebase';
 
 const AuthContext = createContext();
+let failedAttempts = 0
 
 export const useAuth = () => {
   const context = useContext(AuthContext);
@@ -87,23 +91,31 @@ export const AuthProvider = ({ children }) => {
     };
   };
 
-  const login = async (email, password) => {
-    try {
-      await setPersistence(auth,browserLocalPersistence)
-      const userCredential = await signInWithEmailAndPassword(auth, email, password);
-      const userDoc = await getDoc(doc(db, 'users', userCredential.user.uid));
-      
-      if (userDoc.exists()) {
-        setUser(userDoc.data());
-      }
-      
-      return { success: true };
-    } catch (error) {
-      console.error('Login error:', error);
-      return { success: false, error: error.message };
-    }
-  };
+const login = async (email, password) => {
+  try {
+    const response = await fetch("http:/auth/login", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ email, password }),
+      credentials: "include",
+    });
 
+    const data = await response.json();
+    console.log(data.message);
+
+    if (!data.success) {
+      return data;
+    }
+
+    // ✅ Use custom token, not ID token
+    await signInWithCustomToken(auth, data.customToken);
+
+    return data;
+  } catch (err) {
+    console.error("Login error:", err);
+    return { success: false, error: err.message };
+  }
+};
   const signup = async (email, password, fullName, role = 'guest') => {
     try {
       const userCredential = await createUserWithEmailAndPassword(auth, email, password);
