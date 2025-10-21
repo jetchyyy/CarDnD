@@ -1,6 +1,5 @@
 import { createContext, useState, useContext, useEffect } from 'react';
 import { 
-  signInWithEmailAndPassword,
   createUserWithEmailAndPassword,
   signOut,
   signInWithPopup,
@@ -8,13 +7,12 @@ import {
   onAuthStateChanged,
   setPersistence,
   browserLocalPersistence,
+  updateProfile as updateFirebaseProfile,
   signInWithCustomToken,
 } from 'firebase/auth';
 import { doc, getDoc, setDoc, updateDoc } from 'firebase/firestore';
 import { auth, db } from '../firebase/firebase';
-import { logoutSession } from '../utils/Session';
-import { httpsCallable } from 'firebase/functions';
-import { functions } from '../firebase/firebase';
+import { logoutSession, loginSession } from '../utils/session';
 
 const AuthContext = createContext();
 let failedAttempts = 0
@@ -32,18 +30,18 @@ export const AuthProvider = ({ children }) => {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    // Set loading to true initially
+    setLoading(true);
     
     // Listen to Firebase auth state changes
     const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
-    
       if (firebaseUser) {
         try {
           // Fetch user document from Firestore
           const userDoc = await getDoc(doc(db, 'users', firebaseUser.uid));
           if (userDoc.exists()) {
-            setUser(userDoc.data());
-            setLoading(false)
-            
+            const userData = userDoc.data();
+            setUser(userData);
           } else {
             // If user document doesn't exist, create a basic one
             const newUser = createUserDocument(
@@ -66,17 +64,24 @@ export const AuthProvider = ({ children }) => {
       setLoading(false);
     });
 
-    const interval = setInterval(async()=>{
-      await logoutSession()
-     
-    },6000)
+    // Session check interval - only check if user exists
+    const interval = setInterval(async () => {
+      // Only run session check if there's an authenticated user
+      const currentUser = auth.currentUser;
+      if (currentUser) {
+        try {
+          await logoutSession();
+        } catch (error) {
+          console.error('Session check error:', error);
+        }
+      }
+    }, 6000);
+
     // Cleanup subscription and checking of auth
     return () => {
       unsubscribe();
-      clearInterval(interval)
-
-    }
-
+      clearInterval(interval);
+    };
   }, []);
 
   // Helper function to create user document structure
@@ -91,7 +96,7 @@ export const AuthProvider = ({ children }) => {
     };
   };
 
-const login = async (email, password) => {
+  const login = async (email, password) => {
   try {
     const response = await fetch("http:/auth/login", {
       method: "POST",
@@ -115,10 +120,21 @@ const login = async (email, password) => {
     console.error("Login error:", err);
     return { success: false, error: err.message };
   }
-};
+  }
+
+
   const signup = async (email, password, fullName, role = 'guest') => {
     try {
+      // Set persistence before creating user
+      await setPersistence(auth, browserLocalPersistence);
+      
+      // Create user account
       const userCredential = await createUserWithEmailAndPassword(auth, email, password);
+      
+      // Update Firebase Auth profile with display name
+      await updateFirebaseProfile(userCredential.user, {
+        displayName: fullName
+      });
       
       // Create user document in Firestore
       const newUser = createUserDocument(
@@ -129,13 +145,33 @@ const login = async (email, password) => {
         role
       );
       
+      // Wait for the document to be created
       await setDoc(doc(db, 'users', userCredential.user.uid), newUser);
+      
+      // Set user state immediately and wait a bit for it to propagate
       setUser(newUser);
       
-      return { success: true };
+      // Set session with 7 days expiry
+      loginSession();
+      
+      // Wait for the auth state to fully update
+      await new Promise(resolve => setTimeout(resolve, 100));
+      
+      return { success: true, user: newUser };
     } catch (error) {
-      console.error('Signup error:', error);
-      return { success: false, error: error.message };
+      // Only log unexpected errors, not common user errors
+      if (error.code !== 'auth/email-already-in-use' && 
+          error.code !== 'auth/weak-password' && 
+          error.code !== 'auth/invalid-email') {
+        console.error('Unexpected signup error:', error);
+      }
+      
+      // Return the Firebase error code for better error handling
+      return { 
+        success: false, 
+        error: error.code || error.message,
+        errorCode: error.code 
+      };
     }
   };
 
@@ -143,7 +179,7 @@ const login = async (email, password) => {
     try {
       await signOut(auth);
       setUser(null);
-      localStorage.removeItem("Session")
+      localStorage.removeItem("Session");
       return { success: true };
     } catch (error) {
       console.error('Logout error:', error);
@@ -153,6 +189,7 @@ const login = async (email, password) => {
 
   const googleSignIn = async (role = 'guest') => {
     try {
+      await setPersistence(auth, browserLocalPersistence);
       const provider = new GoogleAuthProvider();
       const result = await signInWithPopup(auth, provider);
       
@@ -174,10 +211,22 @@ const login = async (email, password) => {
         setUser(userDoc.data());
       }
       
+      // Set session with 7 days expiry
+      loginSession();
+      
       return { success: true };
     } catch (error) {
-      console.error('Google sign in error:', error);
-      return { success: false, error: error.message };
+      // Only log unexpected errors
+      if (error.code !== 'auth/popup-closed-by-user' && 
+          error.code !== 'auth/cancelled-popup-request' &&
+          error.code !== 'auth/popup-blocked') {
+        console.error('Unexpected Google sign-in error:', error);
+      }
+      return { 
+        success: false, 
+        error: error.code || error.message,
+        errorCode: error.code 
+      };
     }
   };
 

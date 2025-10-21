@@ -1,47 +1,121 @@
 import { useState, useEffect } from 'react';
-import { Search, SlidersHorizontal } from 'lucide-react';
+import { useSearchParams } from 'react-router-dom';
+import { Search, SlidersHorizontal, MapPin, Calendar } from 'lucide-react';
 import CarCard from '../components/CarCard';
 import { db } from '../firebase/firebase';
 import { collection, getDocs, query, orderBy } from 'firebase/firestore';
 
 const CarList = () => {
+  const [searchParams, setSearchParams] = useSearchParams();
+  
   const [filters, setFilters] = useState({
-    vehicleType: 'all',
+    vehicleType: searchParams.get('type') || 'all',
     priceRange: [0, 10000],
     transmission: 'all',
     seats: 'all',
-    sortBy: 'recommended'
+    sortBy: 'recommended',
+    location: searchParams.get('location') || '',
+    pickupDate: searchParams.get('pickup') || '',
+    returnDate: searchParams.get('return') || ''
   });
 
   const [showFilters, setShowFilters] = useState(false);
   const [vehicles, setVehicles] = useState([]);
+  const [bookings, setBookings] = useState([]);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
 
-  // Fetch vehicles from Firestore
+  // Fetch vehicles and bookings from Firestore
   useEffect(() => {
-    const fetchVehicles = async () => {
+    const fetchData = async () => {
       setLoading(true);
       try {
-        const q = query(collection(db, 'vehicles'), orderBy('createdAt', 'desc'));
-        const snapshot = await getDocs(q);
-        const fetchedVehicles = snapshot.docs.map(doc => ({
+        // Fetch vehicles
+        const vehiclesQuery = query(collection(db, 'vehicles'), orderBy('createdAt', 'desc'));
+        const vehiclesSnapshot = await getDocs(vehiclesQuery);
+        const fetchedVehicles = vehiclesSnapshot.docs.map(doc => ({
           id: doc.id,
           ...doc.data(),
         }));
         setVehicles(fetchedVehicles);
+
+        // Fetch bookings for availability checking
+        const bookingsSnapshot = await getDocs(collection(db, 'bookings'));
+        const fetchedBookings = bookingsSnapshot.docs.map(doc => ({
+          id: doc.id,
+          ...doc.data(),
+        }));
+        setBookings(fetchedBookings);
       } catch (error) {
-        console.error('Error fetching vehicles:', error);
+        console.error('Error fetching data:', error);
       } finally {
         setLoading(false);
       }
     };
 
-    fetchVehicles();
+    fetchData();
   }, []);
 
   const handleFilterChange = (key, value) => {
     setFilters(prev => ({ ...prev, [key]: value }));
+    
+    // Update URL params for location and dates
+    const newParams = new URLSearchParams(searchParams);
+    if (key === 'location') {
+      if (value) {
+        newParams.set('location', value);
+      } else {
+        newParams.delete('location');
+      }
+    } else if (key === 'pickupDate') {
+      if (value) {
+        newParams.set('pickup', value);
+      } else {
+        newParams.delete('pickup');
+      }
+    } else if (key === 'returnDate') {
+      if (value) {
+        newParams.set('return', value);
+      } else {
+        newParams.delete('return');
+      }
+    } else if (key === 'vehicleType') {
+      if (value !== 'all') {
+        newParams.set('type', value);
+      } else {
+        newParams.delete('type');
+      }
+    }
+    setSearchParams(newParams);
+  };
+
+  // Check if a vehicle is available for the selected dates
+  const isVehicleAvailable = (vehicleId, pickupDate, returnDate) => {
+    if (!pickupDate || !returnDate) return true; // No dates selected, show all
+
+    const pickup = new Date(pickupDate);
+    const returnD = new Date(returnDate);
+
+    // Find all confirmed bookings for this vehicle
+    const vehicleBookings = bookings.filter(
+      booking => booking.carId === vehicleId && booking.status === 'confirmed'
+    );
+
+    // Check if any booking conflicts with the requested dates
+    for (const booking of vehicleBookings) {
+      const bookingStart = new Date(booking.startDate);
+      const bookingEnd = new Date(booking.endDate);
+
+      // Check for overlap:
+      // Booking overlaps if it starts before return date AND ends after pickup date
+      const hasOverlap = bookingStart <= returnD && bookingEnd >= pickup;
+      
+      if (hasOverlap) {
+        return false; // Vehicle is not available
+      }
+    }
+
+    return true; // Vehicle is available
   };
 
   // Filter and sort vehicles
@@ -54,6 +128,20 @@ const CarList = () => {
         v.title?.toLowerCase().includes(searchQuery.toLowerCase()) ||
         v.specifications?.brand?.toLowerCase().includes(searchQuery.toLowerCase()) ||
         v.specifications?.model?.toLowerCase().includes(searchQuery.toLowerCase())
+      );
+    }
+
+    // Location filter (case-insensitive partial match)
+    if (filters.location) {
+      filtered = filtered.filter(v => 
+        v.location?.toLowerCase().includes(filters.location.toLowerCase())
+      );
+    }
+
+    // Date availability filter
+    if (filters.pickupDate && filters.returnDate) {
+      filtered = filtered.filter(v => 
+        isVehicleAvailable(v.id, filters.pickupDate, filters.returnDate)
       );
     }
 
@@ -79,10 +167,11 @@ const CarList = () => {
     if (filters.seats !== 'all') {
       const seatCount = parseInt(filters.seats);
       filtered = filtered.filter(v => {
+        // Only apply seat filter to cars, exclude motorcycles when seat filter is active
         if (v.type === 'car') {
           return v.specifications?.seats >= seatCount;
         }
-        return true; // Include motorcycles in 'all' or if they match
+        return false; // Exclude motorcycles when seat filter is applied
       });
     }
 
@@ -106,6 +195,21 @@ const CarList = () => {
   };
 
   const filteredVehicles = getFilteredVehicles();
+
+  const resetFilters = () => {
+    setFilters({
+      vehicleType: 'all',
+      priceRange: [0, 10000],
+      transmission: 'all',
+      seats: 'all',
+      sortBy: 'recommended',
+      location: '',
+      pickupDate: '',
+      returnDate: ''
+    });
+    setSearchQuery('');
+    setSearchParams({});
+  };
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -138,6 +242,39 @@ const CarList = () => {
               </button>
             </div>
           </div>
+
+          {/* Active Filters Display */}
+          {(filters.location || filters.pickupDate || filters.returnDate) && (
+            <div className="mt-4 flex flex-wrap gap-2">
+              {filters.location && (
+                <div className="flex items-center gap-2 bg-blue-100 text-blue-800 px-3 py-1 rounded-full text-sm">
+                  <MapPin className="w-4 h-4" />
+                  <span>{filters.location}</span>
+                  <button
+                    onClick={() => handleFilterChange('location', '')}
+                    className="hover:text-blue-900"
+                  >
+                    ×
+                  </button>
+                </div>
+              )}
+              {filters.pickupDate && filters.returnDate && (
+                <div className="flex items-center gap-2 bg-blue-100 text-blue-800 px-3 py-1 rounded-full text-sm">
+                  <Calendar className="w-4 h-4" />
+                  <span>{filters.pickupDate} to {filters.returnDate}</span>
+                  <button
+                    onClick={() => {
+                      handleFilterChange('pickupDate', '');
+                      handleFilterChange('returnDate', '');
+                    }}
+                    className="hover:text-blue-900"
+                  >
+                    ×
+                  </button>
+                </div>
+              )}
+            </div>
+          )}
         </div>
       </div>
 
@@ -148,6 +285,49 @@ const CarList = () => {
             <div className="bg-white rounded-lg shadow-md p-6 sticky top-24">
               <h3 className="text-lg font-bold text-gray-900 mb-4">Filters</h3>
               
+              {/* Location Filter */}
+              <div className="mb-6">
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  <MapPin className="w-4 h-4 inline mr-1" />
+                  Location
+                </label>
+                <input
+                  type="text"
+                  placeholder="e.g. Cebu City, Talisay"
+                  value={filters.location}
+                  onChange={(e) => handleFilterChange('location', e.target.value)}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-gray-900"
+                />
+              </div>
+
+              {/* Date Filters */}
+              <div className="mb-6">
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  <Calendar className="w-4 h-4 inline mr-1" />
+                  Pickup Date
+                </label>
+                <input
+                  type="date"
+                  value={filters.pickupDate}
+                  onChange={(e) => handleFilterChange('pickupDate', e.target.value)}
+                  min={new Date().toISOString().split('T')[0]}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 text-gray-900"
+                />
+              </div>
+
+              <div className="mb-6">
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Return Date
+                </label>
+                <input
+                  type="date"
+                  value={filters.returnDate}
+                  onChange={(e) => handleFilterChange('returnDate', e.target.value)}
+                  min={filters.pickupDate || new Date().toISOString().split('T')[0]}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 text-gray-900"
+                />
+              </div>
+
               {/* Vehicle Type */}
               <div className="mb-6">
                 <label className="block text-sm font-medium text-gray-700 mb-2">
@@ -239,16 +419,7 @@ const CarList = () => {
               </div>
 
               <button
-                onClick={() => {
-                  setFilters({
-                    vehicleType: 'all',
-                    priceRange: [0, 10000],
-                    transmission: 'all',
-                    seats: 'all',
-                    sortBy: 'recommended'
-                  });
-                  setSearchQuery('');
-                }}
+                onClick={resetFilters}
                 className="w-full bg-gray-100 hover:bg-gray-200 text-gray-700 font-medium py-2 rounded-lg transition-colors"
               >
                 Reset Filters

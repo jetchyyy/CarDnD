@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { useNavigate, useLocation, Link } from 'react-router-dom';
 import { Mail, Lock, Eye, EyeOff, Car, AlertCircle } from 'lucide-react';
 import { useAuth } from '../context/Authcontext';
-import { loginSession } from '../utils/Session';
+import { loginSession} from '../utils/session';
 
 
 const Login = () => {
@@ -37,6 +37,13 @@ const Login = () => {
       } 
     }
   }, [user, navigate, location]);
+  useEffect(() => {
+  if (cooldown <= 0) return;
+  const timer = setInterval(() => {
+    setCooldown((prev) => (prev > 1 ? prev - 1 : 0));
+  }, 1000);
+  return () => clearInterval(timer);
+}, [cooldown]);
 
   useEffect(() => {
   if (cooldown <= 0) return;
