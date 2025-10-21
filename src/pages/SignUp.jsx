@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate, useLocation, Link } from 'react-router-dom';
 import { Mail, Lock, Eye, EyeOff, Car, AlertCircle, User } from 'lucide-react';
 import { useAuth } from '../context/Authcontext';
@@ -17,9 +17,18 @@ const SignUp = () => {
   const [loading, setLoading] = useState(false);
   const [serverError, setServerError] = useState('');
 
-  const { signup, googleSignIn } = useAuth();
+  const { signup, googleSignIn, user } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
+
+  // Navigate when user becomes available after successful signup
+  useEffect(() => {
+    if (user && loading) {
+      const returnTo = location.state?.returnTo || '/';
+      navigate(returnTo, { replace: true });
+      setLoading(false);
+    }
+  }, [user, loading, navigate, location]);
 
   const handleInputChange = (e) => {
     const { name, value } = e.target;
@@ -70,6 +79,21 @@ const SignUp = () => {
     return Object.keys(newErrors).length === 0;
   };
 
+  const getErrorMessage = (errorCode) => {
+    // Map Firebase error codes to user-friendly messages
+    const errorMessages = {
+      'auth/email-already-in-use': 'This email is already registered. Please sign in or use a different email.',
+      'auth/invalid-email': 'Invalid email address format.',
+      'auth/operation-not-allowed': 'Email/password accounts are not enabled. Please contact support.',
+      'auth/weak-password': 'Password is too weak. Please use a stronger password with at least 6 characters.',
+      'auth/network-request-failed': 'Network error. Please check your internet connection and try again.',
+      'auth/too-many-requests': 'Too many attempts. Please try again later.',
+      'auth/user-disabled': 'This account has been disabled. Please contact support.',
+    };
+
+    return errorMessages[errorCode] || 'An unexpected error occurred. Please try again.';
+  };
+
   const handleSubmit = async (e) => {
     e.preventDefault();
 
@@ -80,29 +104,26 @@ const SignUp = () => {
     setLoading(true);
     setServerError('');
 
-    const result = await signup(formData.email, formData.password, formData.fullName, formData.role);
-    
-    setLoading(false);
-
-    if (result.success) {
-      // Navigate to return URL or home
-      const returnTo = location.state?.returnTo || '/';
-      navigate(returnTo);
-    } else {
-      // Handle Firebase error messages
-      let errorMessage = 'An error occurred. Please try again.';
+    try {
+      const result = await signup(formData.email, formData.password, formData.fullName, formData.role);
       
-      if (result.error.includes('email-already-in-use')) {
-        errorMessage = 'An account with this email already exists.';
-      } else if (result.error.includes('weak-password')) {
-        errorMessage = 'Password is too weak. Please use a stronger password.';
-      } else if (result.error.includes('invalid-email')) {
-        errorMessage = 'Invalid email address.';
-      } else if (result.error.includes('network-request-failed')) {
-        errorMessage = 'Network error. Please check your connection.';
+      if (result.success) {
+        // Wait a bit longer to ensure auth state is fully propagated
+        await new Promise(resolve => setTimeout(resolve, 1000));
+        
+        // Navigate to return URL or home
+        const returnTo = location.state?.returnTo || '/';
+        navigate(returnTo, { replace: true });
+      } else {
+        // Handle Firebase error with specific error codes
+        const errorMessage = getErrorMessage(result.errorCode || result.error);
+        setServerError(errorMessage);
+        setLoading(false);
       }
-      
-      setServerError(errorMessage);
+    } catch (error) {
+      console.error('Signup error:', error);
+      setServerError('An unexpected error occurred. Please try again.');
+      setLoading(false);
     }
   };
 
@@ -110,26 +131,34 @@ const SignUp = () => {
     setLoading(true);
     setServerError('');
 
-    const result = await googleSignIn(formData.role);
-    
-    setLoading(false);
-
-    if (result.success) {
-      // Navigate to return URL or home
-      const returnTo = location.state?.returnTo || '/';
-      navigate(returnTo);
-    } else {
-      let errorMessage = 'Failed to sign up with Google. Please try again.';
+    try {
+      const result = await googleSignIn(formData.role);
       
-      if (result.error.includes('popup-closed')) {
-        errorMessage = 'Sign up was cancelled.';
-      } else if (result.error.includes('popup-blocked')) {
-        errorMessage = 'Popup was blocked. Please allow popups for this site.';
-      } else if (result.error.includes('account-exists-with-different-credential')) {
-        errorMessage = 'An account already exists with this email.';
+      if (result.success) {
+        // Wait a bit longer to ensure auth state is fully propagated
+        await new Promise(resolve => setTimeout(resolve, 1000));
+        
+        // Navigate to return URL or home
+        const returnTo = location.state?.returnTo || '/';
+        navigate(returnTo, { replace: true });
+      } else {
+        const errorMessages = {
+          'auth/popup-closed-by-user': 'Sign up was cancelled.',
+          'auth/popup-blocked': 'Popup was blocked. Please allow popups for this site.',
+          'auth/account-exists-with-different-credential': 'An account already exists with this email using a different sign-in method.',
+          'auth/cancelled-popup-request': 'Only one popup request is allowed at a time.',
+          'auth/operation-not-allowed': 'Google sign-in is not enabled. Please contact support.',
+          'auth/network-request-failed': 'Network error. Please check your connection.',
+        };
+        
+        const errorMessage = errorMessages[result.errorCode] || 'Failed to sign up with Google. Please try again.';
+        setServerError(errorMessage);
+        setLoading(false);
       }
-      
-      setServerError(errorMessage);
+    } catch (error) {
+      console.error('Google signup error:', error);
+      setServerError('An unexpected error occurred with Google sign-in. Please try again.');
+      setLoading(false);
     }
   };
 
@@ -151,7 +180,17 @@ const SignUp = () => {
           {serverError && (
             <div className="mb-6 bg-red-50 border border-red-200 rounded-lg p-4 flex items-start">
               <AlertCircle className="w-5 h-5 text-red-600 mr-2 flex-shrink-0 mt-0.5" />
-              <p className="text-red-700 text-sm">{serverError}</p>
+              <div>
+                <p className="text-red-700 text-sm font-medium">{serverError}</p>
+                {serverError.includes('already registered') && (
+                  <Link 
+                    to="/login" 
+                    className="text-red-600 hover:text-red-700 text-sm underline mt-1 inline-block"
+                  >
+                    Go to sign in page
+                  </Link>
+                )}
+              </div>
             </div>
           )}
 
@@ -169,7 +208,8 @@ const SignUp = () => {
                   name="fullName"
                   value={formData.fullName}
                   onChange={handleInputChange}
-                  className={`w-full pl-10 pr-4 py-3 border ${errors.fullName ? 'border-red-500' : 'border-gray-300'} rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-colors text-gray-900`}
+                  disabled={loading}
+                  className={`w-full pl-10 pr-4 py-3 border ${errors.fullName ? 'border-red-500' : 'border-gray-300'} rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-colors text-gray-900 disabled:bg-gray-100 disabled:cursor-not-allowed`}
                   placeholder="John Doe"
                 />
               </div>
@@ -194,7 +234,8 @@ const SignUp = () => {
                   name="email"
                   value={formData.email}
                   onChange={handleInputChange}
-                  className={`w-full pl-10 pr-4 py-3 border ${errors.email ? 'border-red-500' : 'border-gray-300'} rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-colors text-gray-900`}
+                  disabled={loading}
+                  className={`w-full pl-10 pr-4 py-3 border ${errors.email ? 'border-red-500' : 'border-gray-300'} rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-colors text-gray-900 disabled:bg-gray-100 disabled:cursor-not-allowed`}
                   placeholder="you@example.com"
                 />
               </div>
@@ -219,13 +260,15 @@ const SignUp = () => {
                   name="password"
                   value={formData.password}
                   onChange={handleInputChange}
-                  className={`w-full pl-10 pr-12 py-3 border ${errors.password ? 'border-red-500' : 'border-gray-300'} rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-colors text-gray-900`}
+                  disabled={loading}
+                  className={`w-full pl-10 pr-12 py-3 border ${errors.password ? 'border-red-500' : 'border-gray-300'} rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-colors text-gray-900 disabled:bg-gray-100 disabled:cursor-not-allowed`}
                   placeholder="••••••••"
                 />
                 <button
                   type="button"
                   onClick={() => setShowPassword(!showPassword)}
-                  className="absolute right-3 top-3.5 text-gray-400 hover:text-gray-600"
+                  disabled={loading}
+                  className="absolute right-3 top-3.5 text-gray-400 hover:text-gray-600 disabled:cursor-not-allowed"
                 >
                   {showPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
                 </button>
@@ -251,13 +294,15 @@ const SignUp = () => {
                   name="confirmPassword"
                   value={formData.confirmPassword}
                   onChange={handleInputChange}
-                  className={`w-full pl-10 pr-12 py-3 border ${errors.confirmPassword ? 'border-red-500' : 'border-gray-300'} rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-colors text-gray-900`}
+                  disabled={loading}
+                  className={`w-full pl-10 pr-12 py-3 border ${errors.confirmPassword ? 'border-red-500' : 'border-gray-300'} rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-colors text-gray-900 disabled:bg-gray-100 disabled:cursor-not-allowed`}
                   placeholder="••••••••"
                 />
                 <button
                   type="button"
                   onClick={() => setShowConfirmPassword(!showConfirmPassword)}
-                  className="absolute right-3 top-3.5 text-gray-400 hover:text-gray-600"
+                  disabled={loading}
+                  className="absolute right-3 top-3.5 text-gray-400 hover:text-gray-600 disabled:cursor-not-allowed"
                 >
                   {showConfirmPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
                 </button>
@@ -279,7 +324,8 @@ const SignUp = () => {
                 <button
                   type="button"
                   onClick={() => setFormData(prev => ({ ...prev, role: 'guest' }))}
-                  className={`p-4 border-2 rounded-lg transition-all ${
+                  disabled={loading}
+                  className={`p-4 border-2 rounded-lg transition-all disabled:cursor-not-allowed ${
                     formData.role === 'guest'
                       ? 'border-blue-600 bg-blue-50'
                       : 'border-gray-300 hover:border-gray-400'
@@ -293,7 +339,8 @@ const SignUp = () => {
                 <button
                   type="button"
                   onClick={() => setFormData(prev => ({ ...prev, role: 'host' }))}
-                  className={`p-4 border-2 rounded-lg transition-all ${
+                  disabled={loading}
+                  className={`p-4 border-2 rounded-lg transition-all disabled:cursor-not-allowed ${
                     formData.role === 'host'
                       ? 'border-blue-600 bg-blue-50'
                       : 'border-gray-300 hover:border-gray-400'
@@ -311,7 +358,7 @@ const SignUp = () => {
             <button
               type="submit"
               disabled={loading}
-              className="w-full bg-blue-600 hover:bg-blue-700 disabled:bg-blue-400 text-white font-semibold py-3 rounded-lg transition duration-200 flex items-center justify-center"
+              className="w-full bg-blue-600 hover:bg-blue-700 disabled:bg-blue-400 disabled:cursor-not-allowed text-white font-semibold py-3 rounded-lg transition duration-200 flex items-center justify-center"
             >
               {loading ? (
                 <div className="flex items-center">
@@ -338,7 +385,7 @@ const SignUp = () => {
               type="button"
               onClick={handleGoogleSignUp}
               disabled={loading}
-              className="w-full bg-white border border-gray-300 hover:bg-gray-50 disabled:bg-gray-100 text-gray-700 font-medium py-3 rounded-lg transition duration-200 flex items-center justify-center"
+              className="w-full bg-white border border-gray-300 hover:bg-gray-50 disabled:bg-gray-100 disabled:cursor-not-allowed text-gray-700 font-medium py-3 rounded-lg transition duration-200 flex items-center justify-center"
             >
               <svg className="w-5 h-5 mr-2" viewBox="0 0 24 24">
                 <path
