@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { useAuth } from '../context/Authcontext'; // Import useAuth
 import {
   Car,
   DollarSign,
@@ -18,7 +19,7 @@ import {
 import AddCar from './AddCar';
 import AddMotorcycle from './AddMotorcycle';
 import BookingCalendar from '../components/BookingCalendar';
-import { db, auth } from '../firebase/firebase';
+import { db } from '../firebase/firebase';
 import { collection, query, where, getDocs, deleteDoc, doc, updateDoc } from 'firebase/firestore';
 import { deleteVehicleImages } from '../utils/vehicleService';
 import { getHostBookings } from '../utils/bookingService';
@@ -26,6 +27,7 @@ import { createOrGetChat } from '../utils/chatService';
 
 const HostDashboard = () => {
   const navigate = useNavigate();
+  const { user, loading: authLoading } = useAuth(); // Get user and loading from context
   const [activeTab, setActiveTab] = useState('overview');
   const [showAddVehicle, setShowAddVehicle] = useState(false);
   const [addType, setAddType] = useState('car');
@@ -35,17 +37,24 @@ const HostDashboard = () => {
   const [bookingsLoading, setBookingsLoading] = useState(true);
   const [messagingLoading, setMessagingLoading] = useState(false);
 
-  // Fetch vehicles from Firestore
+  // Fetch vehicles from Firestore - only when auth is ready and user exists
   useEffect(() => {
     const fetchVehicles = async () => {
-      const user = auth.currentUser;
+      // Wait for auth to be ready
+      if (authLoading) {
+        return;
+      }
+
+      // Check if user exists
       if (!user) {
         setLoading(false);
+        navigate('/login'); // Redirect to login if not authenticated
         return;
       }
 
       try {
-        const q = query(collection(db, 'vehicles'), where('hostId', '==', user.uid));
+        setLoading(true);
+        const q = query(collection(db, 'vehicles'), where('hostId', '==', user.userId));
         const snapshot = await getDocs(q);
         const fetchedVehicles = snapshot.docs.map(doc => ({
           id: doc.id,
@@ -60,19 +69,25 @@ const HostDashboard = () => {
     };
 
     fetchVehicles();
-  }, [showAddVehicle]);
+  }, [user, authLoading, showAddVehicle, navigate]); // Added dependencies
 
-  // Fetch bookings from Firestore
+  // Fetch bookings from Firestore - only when auth is ready and user exists
   useEffect(() => {
     const fetchBookings = async () => {
-      const user = auth.currentUser;
+      // Wait for auth to be ready
+      if (authLoading) {
+        return;
+      }
+
+      // Check if user exists
       if (!user) {
         setBookingsLoading(false);
         return;
       }
 
       try {
-        const hostBookings = await getHostBookings(user.uid);
+        setBookingsLoading(true);
+        const hostBookings = await getHostBookings(user.userId);
         hostBookings.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
         setBookings(hostBookings);
       } catch (error) {
@@ -83,7 +98,30 @@ const HostDashboard = () => {
     };
 
     fetchBookings();
-  }, []);
+  }, [user, authLoading]); // Added dependencies
+
+  // Show loading state while auth is being checked
+  if (authLoading) {
+    return (
+      <div className="flex items-center justify-center min-h-screen">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
+          <p className="text-gray-600">Loading...</p>
+        </div>
+      </div>
+    );
+  }
+
+  // Show message if user is not authenticated
+  if (!user) {
+    return (
+      <div className="flex items-center justify-center min-h-screen">
+        <div className="text-center">
+          <p className="text-gray-600">Please log in to access the host dashboard.</p>
+        </div>
+      </div>
+    );
+  }
 
   // Calculate stats from real data
   const calculateStats = () => {
@@ -186,7 +224,7 @@ const HostDashboard = () => {
     try {
       setMessagingLoading(true);
       const chatId = await createOrGetChat(
-        auth.currentUser.uid,
+        user.userId,
         booking.guestId,
         booking.id
       );

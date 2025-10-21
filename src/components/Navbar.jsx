@@ -7,7 +7,7 @@ import { listenToUserChats, getUnreadMessageCount } from '../utils/chatService';
 const Navbar = () => {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [isUserMenuOpen, setIsUserMenuOpen] = useState(false);
-  const { user, logout } = useAuth();
+  const { user, loading, logout } = useAuth(); // Added loading from useAuth
   const navigate = useNavigate();
   const [unreadCount, setUnreadCount] = useState(0);
   const [previousUnreadCount, setPreviousUnreadCount] = useState(0);
@@ -21,7 +21,7 @@ const Navbar = () => {
 
   // Listen to user's chats for unread messages
   useEffect(() => {
-    if (!user) {
+    if (!user || loading) {
       setUnreadCount(0);
       return;
     }
@@ -42,8 +42,8 @@ const Navbar = () => {
           const newMessages = count - previousUnreadCount;
           new Notification('New Message', {
             body: `You have ${newMessages} new message${newMessages > 1 ? 's' : ''}`,
-            icon: '/favicon.ico', // Replace with your app icon
-            tag: 'new-message', // Prevents duplicate notifications
+            icon: '/favicon.ico',
+            tag: 'new-message',
           });
         }
         
@@ -59,7 +59,7 @@ const Navbar = () => {
         unsubscribe();
       }
     };
-  }, [user, previousUnreadCount, unreadCount]);
+  }, [user, loading, previousUnreadCount]);
 
   const toggleMenu = () => setIsMenuOpen(!isMenuOpen);
   const toggleUserMenu = () => setIsUserMenuOpen(!isUserMenuOpen);
@@ -105,7 +105,7 @@ const Navbar = () => {
             >
               Become a Host
             </button>
-            {user && (
+            {!loading && user && (
               <Link 
                 to="/chats" 
                 className="relative text-gray-700 hover:text-blue-600 font-medium transition-colors flex items-center gap-2"
@@ -122,7 +122,13 @@ const Navbar = () => {
 
           {/* Right Side - Auth Buttons */}
           <div className="hidden md:flex items-center space-x-4">
-            {user ? (
+            {loading ? (
+              // Loading skeleton for user section
+              <div className="flex items-center space-x-2 bg-gray-100 rounded-full px-4 py-2">
+                <div className="w-8 h-8 bg-gray-300 rounded-full animate-pulse"></div>
+                <div className="w-20 h-4 bg-gray-300 rounded animate-pulse"></div>
+              </div>
+            ) : user ? (
               <div className="relative">
                 <button
                   onClick={toggleUserMenu}
@@ -260,7 +266,13 @@ const Navbar = () => {
                 Become a Host
               </button>
               <hr className="my-2" />
-              {user ? (
+              {loading ? (
+                // Loading skeleton for mobile menu
+                <div className="flex flex-col space-y-3">
+                  <div className="h-8 bg-gray-200 rounded animate-pulse"></div>
+                  <div className="h-8 bg-gray-200 rounded animate-pulse"></div>
+                </div>
+              ) : user ? (
                 <>
                   <Link 
                     to="/profile" 

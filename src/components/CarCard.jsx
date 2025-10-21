@@ -167,7 +167,7 @@ const CarCard = ({ vehicle }) => {
               <span className="text-2xl font-bold text-gray-900">₱{price}</span>
               <span className="text-gray-600 text-sm ml-1">/day</span>
             </div>
-            <p className="text-xs text-gray-500">{totalTrips} trips</p>
+        
           </div>
           <button 
             onClick={(e) => {

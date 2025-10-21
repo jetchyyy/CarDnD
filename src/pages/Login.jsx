@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { useNavigate, useLocation, Link } from 'react-router-dom';
 import { Mail, Lock, Eye, EyeOff, Car, AlertCircle } from 'lucide-react';
 import { useAuth } from '../context/Authcontext';
-import { loginSession } from '../utils/Session';
+import { loginSession} from '../utils/session';
 
 const Login = () => {
   const [showPassword, setShowPassword] = useState(false);
@@ -10,6 +10,7 @@ const Login = () => {
     email: '',
     password: ''
   });
+  const [cooldown, setCooldown] = useState(0);
   const [errors, setErrors] = useState({});
   const [loading, setLoading] = useState(false);
   const [serverError, setServerError] = useState('');
@@ -33,6 +34,13 @@ const Login = () => {
       }
     }
   }, [user, navigate, location]);
+  useEffect(() => {
+  if (cooldown <= 0) return;
+  const timer = setInterval(() => {
+    setCooldown((prev) => (prev > 1 ? prev - 1 : 0));
+  }, 1000);
+  return () => clearInterval(timer);
+}, [cooldown]);
 
   const handleInputChange = (e) => {
     const { name, value } = e.target;
@@ -88,15 +96,16 @@ const Login = () => {
     } else {
       // Handle Firebase error messages
       let errorMessage = 'An error occurred. Please try again.';
-      
-      if (result.error.includes('user-not-found')) {
-        errorMessage = 'No account found with this email.';
-      } else if (result.error.includes('wrong-password')) {
-        errorMessage = 'Incorrect password.';
-      } else if (result.error.includes('invalid-credential')) {
+      const err = (result.error || '').toLowerCase();
+
+      if (err.includes('invalid') || err.includes('password')) {
         errorMessage = 'Invalid email or password.';
-      } else if (result.error.includes('too-many-requests')) {
-        errorMessage = 'Too many failed attempts. Please try again later.';
+      } else if (err.includes('too many') || err.includes('rate')) {
+        const seconds = result.retryAfter ?? 10;
+        setCooldown(seconds);
+        errorMessage = `Too many failed attempts. Please try again later ${seconds}.`;
+      } else if (err.includes('server')) {
+        errorMessage = 'Server error. Please try again shortly.';
       }
       
       setServerError(errorMessage);
@@ -244,16 +253,22 @@ const Login = () => {
             {/* Submit Button */}
             <button
               type="submit"
-              disabled={loading}
-              className="w-full bg-blue-600 hover:bg-blue-700 disabled:bg-blue-400 text-white font-semibold py-3 rounded-lg transition duration-200 flex items-center justify-center"
+              disabled={loading || cooldown > 0}
+              className={`w-full py-3 rounded-lg text-white font-semibold flex items-center justify-center transition duration-200 ${
+                loading || cooldown > 0
+                  ? "bg-blue-400 cursor-not-allowed"
+                  : "bg-blue-600 hover:bg-blue-700"
+              }`}
             >
               {loading ? (
                 <div className="flex items-center">
                   <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin mr-2"></div>
                   Processing...
                 </div>
+              ) : cooldown > 0 ? (
+                `Try again in ${cooldown}s`
               ) : (
-                'Sign In'
+                "Sign In"
               )}
             </button>
 
