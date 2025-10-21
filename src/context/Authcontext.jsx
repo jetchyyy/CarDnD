@@ -1,6 +1,5 @@
 import { createContext, useState, useContext, useEffect } from 'react';
 import { 
-  signInWithEmailAndPassword,
   createUserWithEmailAndPassword,
   signOut,
   signInWithPopup,
@@ -8,13 +7,15 @@ import {
   onAuthStateChanged,
   setPersistence,
   browserLocalPersistence,
-  updateProfile as updateFirebaseProfile
+  updateProfile as updateFirebaseProfile,
+  signInWithCustomToken,
 } from 'firebase/auth';
 import { doc, getDoc, setDoc, updateDoc } from 'firebase/firestore';
 import { auth, db } from '../firebase/firebase';
 import { logoutSession, loginSession } from '../utils/session';
 
 const AuthContext = createContext();
+let failedAttempts = 0
 
 export const useAuth = () => {
   const context = useContext(AuthContext);
@@ -96,30 +97,30 @@ export const AuthProvider = ({ children }) => {
   };
 
   const login = async (email, password) => {
-    try {
-      await setPersistence(auth, browserLocalPersistence);
-      const userCredential = await signInWithEmailAndPassword(auth, email, password);
-      const userDoc = await getDoc(doc(db, 'users', userCredential.user.uid));
-      
-      if (userDoc.exists()) {
-        setUser(userDoc.data());
-      }
-      
-      // Set session with 7 days expiry
-      loginSession();
-      
-      return { success: true };
-    } catch (error) {
-      // Only log unexpected errors
-      if (error.code !== 'auth/wrong-password' && 
-          error.code !== 'auth/user-not-found' && 
-          error.code !== 'auth/invalid-email' &&
-          error.code !== 'auth/invalid-credential') {
-        console.error('Unexpected login error:', error);
-      }
-      return { success: false, error: error.code || error.message, errorCode: error.code };
+  try {
+    const response = await fetch("http:/auth/login", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ email, password }),
+      credentials: "include",
+    });
+
+    const data = await response.json();
+    console.log(data.message);
+
+    if (!data.success) {
+      return data;
     }
-  };
+
+    // ✅ Use custom token, not ID token
+    await signInWithCustomToken(auth, data.customToken);
+
+    return data;
+  } catch (err) {
+    console.error("Login error:", err);
+    return { success: false, error: err.message };
+  }
+};
 
   const signup = async (email, password, fullName, role = 'guest') => {
     try {
