@@ -1,6 +1,6 @@
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
-import { useEffect, useState } from 'react';
 import { AuthProvider, useAuth } from './context/Authcontext';
+import ProfileCompletionChecker from './components/ProfileCompletionChecker';
 
 // Components
 import Navbar from './components/Navbar';
@@ -95,35 +95,37 @@ function App() {
   return (
     <AuthProvider>
       <Router>
-        <Routes>
-          {/* Main Routes with Navbar and Footer */}
-          <Route path="/" element={<MainLayout><Home /></MainLayout>} />
-          <Route path="/login" element={<MainLayout><Login /></MainLayout>} />
-          <Route path="/signup" element={<MainLayout><SignUp /></MainLayout>} />
-          <Route path="/vehicles" element={<MainLayout><CarList /></MainLayout>} />
-          <Route path="/vehicles/:id" element={<MainLayout><VehicleDetails /></MainLayout>} />
-          <Route path="/booking/confirm/:id" element={<MainLayout><BookingConfirmation /></MainLayout>} />
-          <Route path="/booking-success" element={<MainLayout><BookingSuccess /></MainLayout>} />
-          <Route path="/my-bookings" element={<MainLayout><MyBookings /></MainLayout>} />
-          <Route path="/chats" element={<MainLayout><ChatsList /></MainLayout>} />
-          <Route path="/chat/:chatId" element={<MainLayout><Chat /></MainLayout>} />
-          <Route path="/messages/:chatId" element={<MainLayout><Chat /></MainLayout>} />
-          <Route path="/host/dashboard" element={<MainLayout><HostDashboard /></MainLayout>} />
-          <Route path="/host/add-car" element={<MainLayout><AddCar /></MainLayout>} />
-          <Route path="/host/add-motorcycle" element={<MainLayout><AddMotorcycle /></MainLayout>} />
-          <Route path="/profile" element={<MainLayout><Profile /></MainLayout>} />
-          
-          {/* Admin Routes without Navbar and Footer */}
-          <Route path="/admin" element={<AdminLayout><AdminPanel /></AdminLayout>}>
-            <Route index element={<AdminOverview />} />
-            <Route path="users" element={<AdminUsers />} />
-            <Route path="listings" element={<AdminListings />} />
-            <Route path="bookings" element={<AdminBookings />} />
-            <Route path="transactions" element={<AdminTransactions />} />
-            <Route path="settings" element={<AdminSettings />} />
-            <Route path="payouts" element={<AdminPayouts />} />
-          </Route>
-        </Routes>
+        <ProfileCompletionChecker>
+          <Routes>
+            {/* Main Routes with Navbar and Footer */}
+            <Route path="/" element={<MainLayout><Home /></MainLayout>} />
+            <Route path="/login" element={<MainLayout><Login /></MainLayout>} />
+            <Route path="/signup" element={<MainLayout><SignUp /></MainLayout>} />
+            <Route path="/vehicles" element={<MainLayout><CarList /></MainLayout>} />
+            <Route path="/vehicles/:id" element={<MainLayout><VehicleDetails /></MainLayout>} />
+            <Route path="/booking/confirm/:id" element={<MainLayout><BookingConfirmation /></MainLayout>} />
+            <Route path="/booking-success" element={<MainLayout><BookingSuccess /></MainLayout>} />
+            <Route path="/my-bookings" element={<MainLayout><MyBookings /></MainLayout>} />
+            <Route path="/chats" element={<MainLayout><ChatsList /></MainLayout>} />
+            <Route path="/chat/:chatId" element={<MainLayout><Chat /></MainLayout>} />
+            <Route path="/messages/:chatId" element={<MainLayout><Chat /></MainLayout>} />
+            <Route path="/host/dashboard" element={<MainLayout><HostDashboard /></MainLayout>} />
+            <Route path="/host/add-car" element={<MainLayout><AddCar /></MainLayout>} />
+            <Route path="/host/add-motorcycle" element={<MainLayout><AddMotorcycle /></MainLayout>} />
+            <Route path="/profile" element={<MainLayout><Profile /></MainLayout>} />
+            
+            {/* Admin Routes without Navbar and Footer */}
+            <Route path="/admin" element={<AdminLayout><AdminPanel /></AdminLayout>}>
+              <Route index element={<AdminOverview />} />
+              <Route path="users" element={<AdminUsers />} />
+              <Route path="listings" element={<AdminListings />} />
+              <Route path="bookings" element={<AdminBookings />} />
+              <Route path="transactions" element={<AdminTransactions />} />
+              <Route path="settings" element={<AdminSettings />} />
+              <Route path="payouts" element={<AdminPayouts />} />
+            </Route>
+          </Routes>
+        </ProfileCompletionChecker>
       </Router>
     </AuthProvider>
   );

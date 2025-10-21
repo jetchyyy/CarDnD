@@ -140,7 +140,7 @@ const Home = () => {
                   <MapPin className="absolute left-3 top-3 w-5 h-5 text-gray-400" />
                   <input
                     type="text"
-                    placeholder="Cebu City"
+                    placeholder="e.g. Cebu City, Talisay City"
                     value={searchData.location}
                     onChange={(e) => setSearchData({ ...searchData, location: e.target.value })}
                     className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-gray-900"
@@ -156,6 +156,7 @@ const Home = () => {
                     type="date"
                     value={searchData.pickupDate}
                     onChange={(e) => setSearchData({ ...searchData, pickupDate: e.target.value })}
+                    min={new Date().toISOString().split('T')[0]}
                     className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-gray-900"
                   />
                 </div>
@@ -169,6 +170,7 @@ const Home = () => {
                     type="date"
                     value={searchData.returnDate}
                     onChange={(e) => setSearchData({ ...searchData, returnDate: e.target.value })}
+                    min={searchData.pickupDate || new Date().toISOString().split('T')[0]}
                     className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-gray-900"
                   />
                 </div>

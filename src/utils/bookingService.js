@@ -6,14 +6,6 @@ import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 /**
  * Upload payment proof images to Firebase Storage
  */
-
-
-/**
- * Create a new booking and track service fee
- * @param {Object} bookingData - Booking information
- * @returns {Promise<string>} Booking ID
- */
-
 export const uploadPayment = async (images, paymentId) => {
   if (!images) throw new Error("No images provided to uploadPayment.");
 
@@ -42,8 +34,13 @@ export const uploadPayment = async (images, paymentId) => {
 
   return imageUrls;
 };
-export const createBooking = async (bookingData) => {
 
+/**
+ * Create a new booking and track service fee
+ * @param {Object} bookingData - Booking information
+ * @returns {Promise<string>} Booking ID
+ */
+export const createBooking = async (bookingData) => {
   try {
     // Calculate service fee (5% of total price)
     const serviceFeePercentage = 0.05;

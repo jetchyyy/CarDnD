@@ -2,8 +2,7 @@ import { useState, useEffect } from 'react';
 import { useNavigate, useLocation, Link } from 'react-router-dom';
 import { Mail, Lock, Eye, EyeOff, Car, AlertCircle } from 'lucide-react';
 import { useAuth } from '../context/Authcontext';
-import { loginSession } from '../utils/Session';
-
+import { loginSession} from '../utils/session';
 
 const Login = () => {
   const [showPassword, setShowPassword] = useState(false);
@@ -20,8 +19,6 @@ const Login = () => {
   const navigate = useNavigate();
   const location = useLocation();
 
-
-
   // Redirect based on user role after successful login
   useEffect(() => {
     if (user) {
@@ -34,10 +31,9 @@ const Login = () => {
         // Renter or default user
         const returnTo = location.state?.returnTo || '/';
         navigate(returnTo, { replace: true });
-      } 
+      }
     }
   }, [user, navigate, location]);
-
   useEffect(() => {
   if (cooldown <= 0) return;
   const timer = setInterval(() => {
