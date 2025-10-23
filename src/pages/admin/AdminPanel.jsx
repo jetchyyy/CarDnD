@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { Outlet, useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../../context/Authcontext';
-import { Menu, X, LogOut, LayoutDashboard, Users, Car, Calendar, CreditCard, Settings } from 'lucide-react';
+import { Menu, X, LogOut, LayoutDashboard, Users, Car, Calendar, CreditCard, Settings, FileText, AlertCircle } from 'lucide-react';
 
 export default function AdminPanel() {
   const [sidebarOpen, setSidebarOpen] = useState(true);
@@ -15,8 +15,11 @@ export default function AdminPanel() {
     { label: 'Listings', path: '/admin/listings', icon: Car },
     { label: 'Bookings', path: '/admin/bookings', icon: Calendar },
     { label: 'Payouts', path: '/admin/payouts', icon: CreditCard },
+    { label: 'Reports', path: '/admin/reports', icon: AlertCircle },
     { label: 'Transactions', path: '/admin/transactions', icon: CreditCard },
     { label: 'Settings', path: '/admin/settings', icon: Settings },
+     { label: 'ID Verification', path: '/admin/id-verification', icon: FileText },
+
   ];
 
   const isActive = (path) => location.pathname === path;

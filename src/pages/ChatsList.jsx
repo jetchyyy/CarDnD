@@ -1,14 +1,76 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { MessageCircle, User } from 'lucide-react';
-import { auth } from '../firebase/firebase';
+import { auth, db } from '../firebase/firebase';
+import { doc, getDoc } from 'firebase/firestore';
 import { listenToUserChats } from '../utils/chatService';
 
 const ChatsList = () => {
   const navigate = useNavigate();
   const [chats, setChats] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [userDetails, setUserDetails] = useState({});
   const currentUser = auth.currentUser;
+
+  // Fetch user details from Firestore Users collection
+  const fetchUserDetails = async (userId) => {
+    if (!userId) {
+      return { id: null, name: 'User', photoUrl: null };
+    }
+
+    try {
+      const userRef = doc(db, 'users', userId);
+      const userSnap = await getDoc(userRef);
+      
+      if (userSnap.exists()) {
+        const userData = userSnap.data();
+        return {
+          id: userId,
+          name: userData.name || 'User',
+          email: userData.email || '',
+          photoUrl: userData.photoUrl || null,
+          location: userData.location || '',
+          idVerificationStatus: userData.idVerificationStatus || 'pending'
+        };
+      }
+      return { id: userId, name: 'User', photoUrl: null };
+    } catch (error) {
+      console.error('Error fetching user details:', error);
+      return { id: userId, name: 'User', photoUrl: null };
+    }
+  };
+
+  // Get other user ID from chat
+  const getOtherUserId = (chat, currentUserId) => {
+    // Check participants object (your structure)
+    if (chat.participants && typeof chat.participants === 'object') {
+      const participantIds = Object.keys(chat.participants).filter(
+        id => chat.participants[id] === true && id !== currentUserId
+      );
+      
+      if (participantIds.length > 0) {
+        return participantIds[0];
+      }
+    }
+
+    // Fallback: Check hostId and guestId
+    if (chat.hostId && chat.hostId !== currentUserId) {
+      return chat.hostId;
+    }
+    if (chat.guestId && chat.guestId !== currentUserId) {
+      return chat.guestId;
+    }
+
+    // Fallback: Check users array (legacy)
+    if (chat.users && Array.isArray(chat.users)) {
+      const otherUser = chat.users.find(id => id !== currentUserId);
+      if (otherUser) {
+        return otherUser;
+      }
+    }
+
+    return null;
+  };
 
   useEffect(() => {
     if (!currentUser) {
@@ -17,12 +79,29 @@ const ChatsList = () => {
     }
 
     setLoading(true);
-    const unsubscribe = listenToUserChats(currentUser.uid, (userChats) => {
+    
+    const unsubscribe = listenToUserChats(currentUser.uid, async (userChats) => {
       setChats(userChats);
+      
+      // Fetch user details for all chat participants
+      const userDetailsMap = {};
+      
+      for (const chat of userChats) {
+        const otherUserId = getOtherUserId(chat, currentUser.uid);
+        
+        if (otherUserId && !userDetailsMap[otherUserId]) {
+          const details = await fetchUserDetails(otherUserId);
+          userDetailsMap[otherUserId] = details;
+        }
+      }
+      
+      setUserDetails(userDetailsMap);
       setLoading(false);
     });
 
-    return () => unsubscribe();
+    return () => {
+      unsubscribe();
+    };
   }, [currentUser, navigate]);
 
   const formatTime = (timestamp) => {
@@ -59,9 +138,21 @@ const ChatsList = () => {
     return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
   };
 
-  const getOtherUserName = (chat) => {
-    // You can enhance this to fetch actual user names from Firestore
-    return 'User';
+  const getOtherUserInfo = (chat) => {
+    const otherUserId = getOtherUserId(chat, currentUser.uid);
+    const details = userDetails[otherUserId];
+    
+    return details || { name: 'User', photoUrl: null };
+  };
+
+  // Get user initials for avatar
+  const getUserInitials = (name) => {
+    if (!name || name === 'User') return 'U';
+    const names = name.trim().split(' ');
+    if (names.length >= 2) {
+      return `${names[0][0]}${names[1][0]}`.toUpperCase();
+    }
+    return name.substring(0, 2).toUpperCase();
   };
 
   if (!currentUser) {
@@ -94,47 +185,65 @@ const ChatsList = () => {
             </div>
           ) : (
             <div className="divide-y divide-gray-200">
-              {chats.map((chat) => (
-                <div
-                  key={chat.id}
-                  onClick={() => navigate(`/chat/${chat.id}`)}
-                  className="p-4 hover:bg-gray-50 cursor-pointer transition-colors"
-                >
-                  <div className="flex items-center gap-4">
-                    {/* Avatar */}
-                    <div className="w-12 h-12 bg-blue-600 rounded-full flex items-center justify-center text-white font-semibold flex-shrink-0">
-                      <User className="w-6 h-6" />
-                    </div>
+              {chats.map((chat) => {
+                const otherUser = getOtherUserInfo(chat);
+                
+                return (
+                  <div
+                    key={chat.id}
+                    onClick={() => navigate(`/chat/${chat.id}`)}
+                    className="p-4 hover:bg-gray-50 cursor-pointer transition-colors"
+                  >
+                    <div className="flex items-center gap-4">
+                      {/* Avatar */}
+                      {otherUser.photoUrl ? (
+                        <img
+                          src={otherUser.photoUrl}
+                          alt={otherUser.name}
+                          className="w-12 h-12 rounded-full object-cover flex-shrink-0"
+                        />
+                      ) : (
+                        <div className="w-12 h-12 bg-blue-600 rounded-full flex items-center justify-center text-white font-semibold flex-shrink-0">
+                          {getUserInitials(otherUser.name)}
+                        </div>
+                      )}
 
-                    {/* Chat Info */}
-                    <div className="flex-1 min-w-0">
-                      <div className="flex justify-between items-baseline mb-1">
-                        <h3 className="font-semibold text-gray-900 truncate">
-                          {getOtherUserName(chat)}
-                        </h3>
-                        <span className="text-xs text-gray-500 ml-2 flex-shrink-0">
-                          {formatTime(chat.updatedAt)}
-                        </span>
-                      </div>
-                      <p className="text-sm text-gray-600 truncate">
-                        {chat.lastMessage ? (
-                          <>
-                            {chat.lastMessageSender && chat.lastMessageSender !== currentUser.displayName && (
-                              <span className="font-medium">{chat.lastMessageSender}: </span>
+                      {/* Chat Info */}
+                      <div className="flex-1 min-w-0">
+                        <div className="flex justify-between items-baseline mb-1">
+                          <div className="flex items-center gap-2">
+                            <h3 className="font-semibold text-gray-900 truncate">
+                              {otherUser.name}
+                            </h3>
+                            {otherUser.idVerificationStatus === 'approved' && (
+                              <span className="inline-flex items-center text-xs text-green-600">
+                                <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 20 20">
+                                  <path fillRule="evenodd" d="M6.267 3.455a3.066 3.066 0 001.745-.723 3.066 3.066 0 013.976 0 3.066 3.066 0 001.745.723 3.066 3.066 0 012.812 2.812c.051.643.304 1.254.723 1.745a3.066 3.066 0 010 3.976 3.066 3.066 0 00-.723 1.745 3.066 3.066 0 01-2.812 2.812 3.066 3.066 0 00-1.745.723 3.066 3.066 0 01-3.976 0 3.066 3.066 0 00-1.745-.723 3.066 3.066 0 01-2.812-2.812 3.066 3.066 0 00-.723-1.745 3.066 3.066 0 010-3.976 3.066 3.066 0 00.723-1.745 3.066 3.066 0 012.812-2.812zm7.44 5.252a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+                                </svg>
+                              </span>
                             )}
-                            {chat.lastMessage}
-                          </>
-                        ) : (
-                          <span className="text-gray-400">No messages yet</span>
-                        )}
-                      </p>
+                          </div>
+                          <span className="text-xs text-gray-500 ml-2 flex-shrink-0">
+                            {formatTime(chat.updatedAt)}
+                          </span>
+                        </div>
+                        <p className="text-sm text-gray-600 truncate">
+                          {chat.lastMessage ? (
+                            <>
+                              {chat.lastMessageSender && chat.lastMessageSender !== currentUser.displayName && (
+                                <span className="font-medium">{chat.lastMessageSender}: </span>
+                              )}
+                              {chat.lastMessage}
+                            </>
+                          ) : (
+                            <span className="text-gray-400">No messages yet</span>
+                          )}
+                        </p>
+                      </div>
                     </div>
-
-                    {/* Unread indicator (optional) */}
-                    {/* <div className="w-2 h-2 bg-blue-600 rounded-full"></div> */}
                   </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
           )}
         </div>
