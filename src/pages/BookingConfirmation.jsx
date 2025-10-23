@@ -18,6 +18,7 @@ import {
   getAvailabilityErrorMessage 
 } from '../utils/availabilityService';
 import PaymentModal from '../components/PaymentModal';
+import emailjs from 'emailjs-com';
 
 const BookingConfirmation = () => {
   const { id } = useParams();
@@ -122,8 +123,34 @@ const BookingConfirmation = () => {
         guestEmail: currentUser.email,
         paymentReceipt: imageUrls[0],
       };
-
+      
       const bookingId = await createBooking(bookingData);
+      try {
+        const templateParams = {
+          email:currentUser.email,
+          username:currentUser.displayName || currentUser.email?.split('@')[0] || 'Guest',
+          subject:`Booking Confirmation #${bookingId}`,
+          orderId:bookingId,
+          vehicle_image:vehicle.images?.[0] || '',
+          vehicle_name:vehicle.title,
+          vehicle_location:vehicle.location,
+          vehicle_type:vehicle.type,
+          vehicle_transmission:vehicle.specifications?.transmission,
+          check_in:bookingDates.startDate,
+          check_out:bookingDates.endDate,
+          duration:`${days} ${days === 1 ? 'day' : 'days'}`,
+          amount:totalPrice,
+        }
+        const response = await emailjs.send(
+          import.meta.env.VITE_EMAILJS_SERVICE_ID,
+          import.meta.env.VITE_EMAILJS_TEMPLATE_ID,
+          templateParams,
+          import.meta.env.VITE_EMAILJS_PUBLIC_KEY
+        );
+      } catch (error) {
+        console.error("Failed to send email:", error);
+      }
+
       
       // Navigate to success page
       navigate('/booking-success', { 
