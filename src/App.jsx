@@ -31,21 +31,23 @@ import AdminBookings from './pages/admin/AdminBookings';
 import AdminTransactions from './pages/admin/AdminTransactions';
 import AdminSettings from './pages/admin/AdminSettings';
 import AdminPayouts from './pages/admin/AdminPayouts';
+import AdminIDVerification from './pages/admin/AdminIDVerification';
+import AdminReports from './pages/admin/AdminReports';
+
+// Protected Route Component for regular authenticated users
+const ProtectedRoute = ({ children }) => {
+  const { user } = useAuth();
+
+  if (!user) {
+    return <Navigate to="/login" replace />;
+  }
+
+  return children;
+};
 
 // Protected Route Component for Admin
 const ProtectedAdminRoute = ({ children }) => {
-  const { user, loading } = useAuth();
-
-  if (loading) {
-    return (
-      <div className="flex items-center justify-center min-h-screen">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
-          <p className="text-gray-600">Loading...</p>
-        </div>
-      </div>
-    );
-  }
+  const { user } = useAuth();
 
   if (!user) {
     return <Navigate to="/login" replace />;
@@ -97,32 +99,106 @@ function App() {
       <Router>
         <ProfileCompletionChecker>
           <Routes>
-            {/* Main Routes with Navbar and Footer */}
+            {/* Public Routes */}
             <Route path="/" element={<MainLayout><Home /></MainLayout>} />
             <Route path="/login" element={<MainLayout><Login /></MainLayout>} />
             <Route path="/signup" element={<MainLayout><SignUp /></MainLayout>} />
             <Route path="/vehicles" element={<MainLayout><CarList /></MainLayout>} />
             <Route path="/vehicles/:id" element={<MainLayout><VehicleDetails /></MainLayout>} />
-            <Route path="/booking/confirm/:id" element={<MainLayout><BookingConfirmation /></MainLayout>} />
-            <Route path="/booking-success" element={<MainLayout><BookingSuccess /></MainLayout>} />
-            <Route path="/my-bookings" element={<MainLayout><MyBookings /></MainLayout>} />
-            <Route path="/chats" element={<MainLayout><ChatsList /></MainLayout>} />
-            <Route path="/chat/:chatId" element={<MainLayout><Chat /></MainLayout>} />
-            <Route path="/messages/:chatId" element={<MainLayout><Chat /></MainLayout>} />
-            <Route path="/host/dashboard" element={<MainLayout><HostDashboard /></MainLayout>} />
-            <Route path="/host/add-car" element={<MainLayout><AddCar /></MainLayout>} />
-            <Route path="/host/add-motorcycle" element={<MainLayout><AddMotorcycle /></MainLayout>} />
-            <Route path="/profile" element={<MainLayout><Profile /></MainLayout>} />
             
-            {/* Admin Routes without Navbar and Footer */}
+            {/* Protected Routes - Require Authentication */}
+            <Route 
+              path="/booking/confirm/:id" 
+              element={
+                <ProtectedRoute>
+                  <MainLayout><BookingConfirmation /></MainLayout>
+                </ProtectedRoute>
+              } 
+            />
+            <Route 
+              path="/booking-success" 
+              element={
+                <ProtectedRoute>
+                  <MainLayout><BookingSuccess /></MainLayout>
+                </ProtectedRoute>
+              } 
+            />
+            <Route 
+              path="/my-bookings" 
+              element={
+                <ProtectedRoute>
+                  <MainLayout><MyBookings /></MainLayout>
+                </ProtectedRoute>
+              } 
+            />
+            <Route 
+              path="/chats" 
+              element={
+                <ProtectedRoute>
+                  <MainLayout><ChatsList /></MainLayout>
+                </ProtectedRoute>
+              } 
+            />
+            <Route 
+              path="/chat/:chatId" 
+              element={
+                <ProtectedRoute>
+                  <MainLayout><Chat /></MainLayout>
+                </ProtectedRoute>
+              } 
+            />
+            <Route 
+              path="/messages/:chatId" 
+              element={
+                <ProtectedRoute>
+                  <MainLayout><Chat /></MainLayout>
+                </ProtectedRoute>
+              } 
+            />
+            <Route 
+              path="/host/dashboard" 
+              element={
+                <ProtectedRoute>
+                  <MainLayout><HostDashboard /></MainLayout>
+                </ProtectedRoute>
+              } 
+            />
+            <Route 
+              path="/host/add-car" 
+              element={
+                <ProtectedRoute>
+                  <MainLayout><AddCar /></MainLayout>
+                </ProtectedRoute>
+              } 
+            />
+            <Route 
+              path="/host/add-motorcycle" 
+              element={
+                <ProtectedRoute>
+                  <MainLayout><AddMotorcycle /></MainLayout>
+                </ProtectedRoute>
+              } 
+            />
+            <Route 
+              path="/profile" 
+              element={
+                <ProtectedRoute>
+                  <MainLayout><Profile /></MainLayout>
+                </ProtectedRoute>
+              } 
+            />
+            
+            {/* Admin Routes - Require Admin Role */}
             <Route path="/admin" element={<AdminLayout><AdminPanel /></AdminLayout>}>
               <Route index element={<AdminOverview />} />
               <Route path="users" element={<AdminUsers />} />
               <Route path="listings" element={<AdminListings />} />
               <Route path="bookings" element={<AdminBookings />} />
               <Route path="transactions" element={<AdminTransactions />} />
+              <Route path='reports' element={<AdminReports />} />
               <Route path="settings" element={<AdminSettings />} />
               <Route path="payouts" element={<AdminPayouts />} />
+              <Route path="id-verification" element={<AdminIDVerification />} />
             </Route>
           </Routes>
         </ProfileCompletionChecker>

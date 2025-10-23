@@ -14,7 +14,8 @@ import {
   Bike,
   Check,
   XCircle,
-  MessageSquare
+  MessageSquare,
+  Lock
 } from 'lucide-react';
 import AddCar from './AddCar';
 import AddMotorcycle from './AddMotorcycle';
@@ -36,6 +37,14 @@ const HostDashboard = () => {
   const [loading, setLoading] = useState(true);
   const [bookingsLoading, setBookingsLoading] = useState(true);
   const [messagingLoading, setMessagingLoading] = useState(false);
+  const [showVerificationAlert, setShowVerificationAlert] = useState(false);
+
+
+  const canAddVehicle = user?.idVerificationStatus === 'approved';
+  const isPending = user?.idVerificationStatus === 'pending';
+  const needsVerification = !user?.idVerificationStatus || user?.idVerificationStatus === 'idle' || user?.idVerificationStatus === 'rejected';
+
+  
 
   // Fetch vehicles from Firestore - only when auth is ready and user exists
   useEffect(() => {
@@ -122,6 +131,15 @@ const HostDashboard = () => {
       </div>
     );
   }
+
+  const handleAddVehicleClick = () => {
+    if (!canAddVehicle) {
+      setShowVerificationAlert(true);
+      setTimeout(() => setShowVerificationAlert(false), 5000);
+      return;
+    }
+    setShowAddVehicle(true);
+  };
 
   // Calculate stats from real data
   const calculateStats = () => {
@@ -258,23 +276,82 @@ const HostDashboard = () => {
   const recentBookings = bookings.slice(0, 5);
 
   return (
-    <div className="relative min-h-screen bg-gray-50">
+     <div className="relative min-h-screen bg-gray-50">
+      {/* Verification Alert Banner */}
+      {showVerificationAlert && (
+        <div className="fixed top-20 left-1/2 transform -translate-x-1/2 z-50 w-full max-w-md px-4">
+          <div className="bg-amber-50 border-l-4 border-amber-500 rounded-lg shadow-lg p-4">
+            <div className="flex items-start">
+              <div className="flex-shrink-0">
+                <Lock className="w-6 h-6 text-amber-600" />
+              </div>
+              <div className="ml-3 flex-1">
+                <h3 className="text-sm font-semibold text-amber-900">
+                  {isPending ? 'ID Verification Pending' : 'ID Verification Required'}
+                </h3>
+                <p className="mt-1 text-sm text-amber-700">
+                  {isPending 
+                    ? 'Your ID is currently being reviewed. You can add vehicles once your verification is approved (usually within 24-48 hours).'
+                    : 'You need to verify your ID before you can list vehicles on our platform.'}
+                </p>
+                {needsVerification && (
+                  <button
+                    onClick={() => {
+                      setShowVerificationAlert(false);
+                      navigate('/profile');
+                    }}
+                    className="mt-2 text-sm font-medium text-amber-800 hover:text-amber-900 underline"
+                  >
+                    Verify ID Now
+                  </button>
+                )}
+              </div>
+              <button
+                onClick={() => setShowVerificationAlert(false)}
+                className="ml-3 flex-shrink-0 text-amber-400 hover:text-amber-600"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        {/* Header Section */}
         <div className="flex justify-between items-center mb-8">
           <div>
             <h1 className="text-3xl font-bold text-gray-900">Host Dashboard</h1>
             <p className="text-gray-600 mt-1">Manage your vehicles and bookings</p>
           </div>
-          <button
-            onClick={() => setShowAddVehicle(true)}
-            className="flex items-center space-x-2 bg-blue-600 hover:bg-blue-700 text-white font-semibold px-6 py-3 rounded-lg transition-colors"
-          >
-            <Plus className="w-5 h-5" />
-            <span>Add Vehicle</span>
-          </button>
+          
+          <div className="relative">
+            <button
+              onClick={handleAddVehicleClick}
+              disabled={!canAddVehicle}
+              className={`flex items-center space-x-2 font-semibold px-6 py-3 rounded-lg transition-colors ${
+                canAddVehicle
+                  ? 'bg-blue-600 hover:bg-blue-700 text-white'
+                  : 'bg-gray-300 text-gray-500 cursor-not-allowed'
+              }`}
+            >
+              {!canAddVehicle && <Lock className="w-5 h-5" />}
+              <Plus className="w-5 h-5" />
+              <span>Add Vehicle</span>
+            </button>
+            {!canAddVehicle && (
+              <div className="absolute top-full mt-2 right-0 w-64 bg-white rounded-lg shadow-lg p-3 border border-gray-200 z-10">
+                <p className="text-xs text-gray-600">
+                  {isPending 
+                    ? '⏳ Your ID verification is pending. You can add vehicles once approved.'
+                    : '🔒 Please verify your ID to start listing vehicles.'}
+                </p>
+              </div>
+            )}
+          </div>
         </div>
 
-        {/* Stats */}
+        {/* Stats Grid */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
           {stats.map((stat, index) => (
             <div key={index} className="bg-white rounded-xl shadow-md p-6">
@@ -289,6 +366,7 @@ const HostDashboard = () => {
             </div>
           ))}
         </div>
+      
 
         {/* Tabs */}
         <div className="bg-white rounded-xl shadow-md mb-8">
@@ -678,8 +756,12 @@ const HostDashboard = () => {
             </div>
 
             <div className="p-6 max-h-[80vh] overflow-y-auto">
-              {addType === 'car' ? <AddCar /> : <AddMotorcycle />}
-            </div>
+  {addType === 'car' ? (
+    <AddCar onSuccess={() => setShowAddVehicle(false)} />
+  ) : (
+    <AddMotorcycle onSuccess={() => setShowAddVehicle(false)} />
+  )}
+</div>
           </div>
         </div>
       )}

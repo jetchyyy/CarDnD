@@ -8,23 +8,19 @@ import {
   doc,
   updateDoc,
   getDoc,
-  addDoc,
   writeBatch
 } from 'firebase/firestore';
-import { LineChart, Line, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
 import {
   CreditCard,
   Check,
-  X,
   Eye,
   Send,
-  Filter,
   Download,
   AlertCircle,
   Loader,
   CheckCircle,
   Clock,
-  XCircle
+  TrendingUp
 } from 'lucide-react';
 
 export default function AdminPayouts() {
@@ -32,7 +28,7 @@ export default function AdminPayouts() {
   const [payoutMethods, setPayoutMethods] = useState({});
   const [hostData, setHostData] = useState({});
   const [loading, setLoading] = useState(true);
-  const [filter, setFilter] = useState('pending');
+  const [filter, setFilter] = useState('verified');
   const [selectedMethod, setSelectedMethod] = useState(null);
   const [processingId, setProcessingId] = useState(null);
   const [payoutForm, setPayoutForm] = useState({
@@ -72,7 +68,7 @@ export default function AdminPayouts() {
           console.error('Error fetching host user data:', err);
         }
 
-        // Fetch host's bookings to calculate total earnings
+        // Fetch host's unpaid bookings to calculate earnings
         let totalEarnings = 0;
         let unpaidBookingIds = [];
         try {
@@ -85,23 +81,24 @@ export default function AdminPayouts() {
           
           bookingsSnap.docs.forEach(booking => {
             const bookingData = booking.data();
-            const price = bookingData.totalPrice || 0;
+            // Use hostEarnings (totalPrice - serviceFee) instead of totalPrice
+            const earnings = bookingData.hostEarnings || 0;
             
             // Check if booking has NOT been paid out
             if (!bookingData.paidOutAt) {
               unpaidBookingIds.push(booking.id);
-              totalEarnings += (typeof price === 'number' ? price : 0);
+              totalEarnings += (typeof earnings === 'number' ? earnings : 0);
             }
           });
           
-          console.log(`Host ${methodData.userId} - Unpaid bookings: ${unpaidBookingIds.length}, Total: ₱${totalEarnings}`);
+          console.log(`Host ${methodData.userId} - Unpaid bookings: ${unpaidBookingIds.length}, Total earnings: ₱${totalEarnings}`);
         } catch (err) {
           console.error('Error fetching bookings for host:', methodData.userId, err);
           totalEarnings = 0;
           unpaidBookingIds = [];
         }
 
-        // Always create payout request - with fallback values
+        // Create payout request entry
         requests.push({
           methodId: methodDoc.id || '',
           userId: methodData.userId || '',
@@ -110,9 +107,9 @@ export default function AdminPayouts() {
           isPrimary: methodData.isPrimary || false,
           verified: methodData.verified || false,
           totalEarnings: totalEarnings || 0,
-          paidAmount: 0,
           earnings: totalEarnings || 0,
           unpaidBookingIds: unpaidBookingIds || [],
+          unpaidBookingCount: unpaidBookingIds.length,
           addedAt: methodData.addedAt || new Date().toISOString(),
           type: methodData.type || 'gcash',
           verifiedAt: methodData.verifiedAt || null
@@ -127,7 +124,9 @@ export default function AdminPayouts() {
       if (filter === 'pending') {
         filtered = requests.filter(r => !r.verified);
       } else if (filter === 'verified') {
-        filtered = requests.filter(r => r.verified);
+        filtered = requests.filter(r => r.verified && r.earnings > 0);
+      } else if (filter === 'ready') {
+        filtered = requests.filter(r => r.verified && r.earnings > 0);
       }
 
       setPayoutRequests(filtered.sort((a, b) => b.earnings - a.earnings));
@@ -199,6 +198,10 @@ export default function AdminPayouts() {
       return;
     }
 
+    if (!window.confirm(`Process payout of ₱${parseFloat(payoutForm.amount).toLocaleString()} to ${selectedMethod.accountName}?`)) {
+      return;
+    }
+
     try {
       setProcessingId(selectedMethod.methodId);
 
@@ -224,6 +227,12 @@ export default function AdminPayouts() {
         return;
       }
 
+      if (bookingIdsToUpdate.length === 0) {
+        alert('No unpaid bookings found for this host.');
+        setProcessingId(null);
+        return;
+      }
+
       const batch = writeBatch(db);
       const payoutRef = doc(collection(db, 'payoutTransactions'));
       const payoutTimestamp = new Date().toISOString();
@@ -231,6 +240,7 @@ export default function AdminPayouts() {
       // Create payout transaction record
       const transaction = {
         hostId: selectedMethod.userId,
+        hostName: hostData[selectedMethod.userId]?.name || 'Unknown',
         methodId: selectedMethod.methodId,
         accountName: selectedMethod.accountName,
         mobileNumber: selectedMethod.mobileNumber,
@@ -240,27 +250,25 @@ export default function AdminPayouts() {
         status: 'completed',
         createdAt: payoutTimestamp,
         processedBy: 'admin',
-        bookingIds: bookingIdsToUpdate
+        bookingIds: bookingIdsToUpdate,
+        bookingCount: bookingIdsToUpdate.length
       };
 
       batch.set(payoutRef, transaction);
 
       // Mark all unpaid bookings as paid
-      if (bookingIdsToUpdate.length > 0) {
-        bookingIdsToUpdate.forEach(bookingId => {
-          const bookingRef = doc(db, 'bookings', bookingId);
-          batch.update(bookingRef, {
-            paidOutAt: payoutTimestamp,
-            paidOutTransactionId: payoutRef.id
-          });
+      bookingIdsToUpdate.forEach(bookingId => {
+        const bookingRef = doc(db, 'bookings', bookingId);
+        batch.update(bookingRef, {
+          paidOutAt: payoutTimestamp,
+          paidOutTransactionId: payoutRef.id
         });
-        console.log(`Marked ${bookingIdsToUpdate.length} bookings as paid`);
-      }
+      });
 
       await batch.commit();
 
       console.log('Batch commit successful');
-      alert(`Payout processed successfully!\nReference: ${payoutForm.referenceNumber}\nBookings marked as paid: ${bookingIdsToUpdate.length}`);
+      alert(`✅ Payout processed successfully!\n\nReference: ${payoutForm.referenceNumber}\nAmount: ₱${parseFloat(payoutForm.amount).toLocaleString()}\nBookings paid: ${bookingIdsToUpdate.length}`);
       setShowPayoutModal(false);
       fetchPayoutMethods();
       fetchPayoutHistory();
@@ -281,6 +289,10 @@ export default function AdminPayouts() {
     if (verified) return <CheckCircle className="w-4 h-4" />;
     return <Clock className="w-4 h-4" />;
   };
+
+  const totalPendingPayouts = payoutRequests
+    .filter(r => r.verified && r.earnings > 0)
+    .reduce((sum, r) => sum + (r.earnings || 0), 0);
 
   if (loading) {
     return (
@@ -307,16 +319,16 @@ export default function AdminPayouts() {
       </div>
 
       {/* Stats Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
         <div className="bg-white rounded-lg shadow p-6">
           <div className="flex items-center justify-between">
             <div>
               <p className="text-gray-600 text-sm">Ready for Payout</p>
               <p className="text-3xl font-bold text-gray-900 mt-2">
-                {payoutRequests.filter(r => r.verified).length}
+                {payoutRequests.filter(r => r.verified && r.earnings > 0).length}
               </p>
             </div>
-            <Clock className="w-8 h-8 text-blue-600" />
+            <TrendingUp className="w-8 h-8 text-blue-600" />
           </div>
         </div>
 
@@ -335,28 +347,34 @@ export default function AdminPayouts() {
         <div className="bg-white rounded-lg shadow p-6">
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-gray-600 text-sm">Total Pending Payouts</p>
+              <p className="text-gray-600 text-sm">Total Pending Amount</p>
               <p className="text-3xl font-bold text-gray-900 mt-2">
-                ₱{Math.max(0, payoutRequests.reduce((sum, r) => sum + (r.earnings || 0), 0)).toLocaleString()}
+                ₱{Math.max(0, totalPendingPayouts).toLocaleString()}
               </p>
             </div>
             <CreditCard className="w-8 h-8 text-green-600" />
+          </div>
+        </div>
+
+        <div className="bg-white rounded-lg shadow p-6">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-gray-600 text-sm">Paid This Month</p>
+              <p className="text-3xl font-bold text-gray-900 mt-2">
+                {payoutHistory.filter(p => {
+                  const date = new Date(p.createdAt);
+                  const now = new Date();
+                  return date.getMonth() === now.getMonth() && date.getFullYear() === now.getFullYear();
+                }).length}
+              </p>
+            </div>
+            <CheckCircle className="w-8 h-8 text-purple-600" />
           </div>
         </div>
       </div>
 
       {/* Filter */}
       <div className="flex gap-2">
-        <button
-          onClick={() => setFilter('pending')}
-          className={`px-4 py-2 rounded-lg font-medium transition ${
-            filter === 'pending'
-              ? 'bg-blue-600 text-white'
-              : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-          }`}
-        >
-          Ready for Payout
-        </button>
         <button
           onClick={() => setFilter('verified')}
           className={`px-4 py-2 rounded-lg font-medium transition ${
@@ -365,7 +383,17 @@ export default function AdminPayouts() {
               : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
           }`}
         >
-          Verified Accounts
+          Ready for Payout
+        </button>
+        <button
+          onClick={() => setFilter('pending')}
+          className={`px-4 py-2 rounded-lg font-medium transition ${
+            filter === 'pending'
+              ? 'bg-blue-600 text-white'
+              : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+          }`}
+        >
+          Pending Verification
         </button>
         <button
           onClick={() => setFilter('all')}
@@ -388,7 +416,8 @@ export default function AdminPayouts() {
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-600 uppercase">Host</th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-600 uppercase">GCash Account</th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-600 uppercase">Mobile Number</th>
-                <th className="px-6 py-3 text-right text-xs font-medium text-gray-600 uppercase">Unpaid Earnings</th>
+                <th className="px-6 py-3 text-center text-xs font-medium text-gray-600 uppercase">Unpaid Bookings</th>
+                <th className="px-6 py-3 text-right text-xs font-medium text-gray-600 uppercase">Amount to Pay</th>
                 <th className="px-6 py-3 text-center text-xs font-medium text-gray-600 uppercase">Status</th>
                 <th className="px-6 py-3 text-center text-xs font-medium text-gray-600 uppercase">Actions</th>
               </tr>
@@ -396,7 +425,7 @@ export default function AdminPayouts() {
             <tbody className="divide-y divide-gray-200">
               {payoutRequests.length === 0 ? (
                 <tr>
-                  <td colSpan="6" className="px-6 py-12 text-center">
+                  <td colSpan="7" className="px-6 py-12 text-center">
                     <CreditCard className="w-12 h-12 text-gray-400 mx-auto mb-3" />
                     <p className="text-gray-600">No payout requests found</p>
                   </td>
@@ -409,7 +438,7 @@ export default function AdminPayouts() {
                         <p className="font-semibold text-gray-900">
                           {hostData[request.userId]?.name || 'Unknown Host'}
                         </p>
-                        <p className="text-sm text-gray-600">{request.userId}</p>
+                        <p className="text-xs text-gray-600">{request.userId.substring(0, 12)}...</p>
                       </div>
                     </td>
                     <td className="px-6 py-4">
@@ -418,8 +447,14 @@ export default function AdminPayouts() {
                     <td className="px-6 py-4">
                       <p className="text-gray-900">{request.mobileNumber}</p>
                     </td>
+                    <td className="px-6 py-4 text-center">
+                      <span className="inline-flex items-center justify-center w-8 h-8 bg-blue-100 text-blue-700 rounded-full font-semibold text-sm">
+                        {request.unpaidBookingCount || 0}
+                      </span>
+                    </td>
                     <td className="px-6 py-4 text-right">
                       <p className="font-bold text-gray-900">₱{(request.earnings || 0).toLocaleString()}</p>
+                      <p className="text-xs text-gray-500">Host earnings after fees</p>
                     </td>
                     <td className="px-6 py-4 text-center">
                       <span className={`inline-flex items-center gap-1 px-3 py-1 rounded-full text-xs font-semibold ${getStatusColor(request.verified)}`}>
@@ -450,10 +485,11 @@ export default function AdminPayouts() {
                             )}
                           </button>
                         )}
-                        {request.verified && (
+                        {request.verified && request.earnings > 0 && (
                           <button
                             onClick={() => openPayoutModal(request)}
-                            className="p-2 bg-blue-100 hover:bg-blue-200 text-blue-700 rounded-lg transition"
+                            disabled={processingId === request.methodId}
+                            className="p-2 bg-blue-100 hover:bg-blue-200 text-blue-700 rounded-lg transition disabled:opacity-50"
                             title="Process payout"
                           >
                             <Send className="w-4 h-4" />
@@ -479,16 +515,21 @@ export default function AdminPayouts() {
             {payoutHistory.map(payout => (
               <div
                 key={payout.id}
-                className="flex items-center justify-between p-4 border border-gray-200 rounded-lg"
+                className="flex items-center justify-between p-4 border border-gray-200 rounded-lg hover:bg-gray-50 transition"
               >
-                <div>
+                <div className="flex-1">
                   <p className="font-semibold text-gray-900">{payout.accountName}</p>
-                  <p className="text-sm text-gray-600">{payout.referenceNumber}</p>
+                  <p className="text-sm text-gray-600">Ref: {payout.referenceNumber}</p>
+                  <p className="text-xs text-gray-500">{payout.bookingCount} booking(s) paid</p>
                 </div>
                 <div className="text-right">
                   <p className="font-bold text-gray-900">₱{(payout.amount || 0).toLocaleString()}</p>
                   <p className="text-xs text-gray-600">
-                    {new Date(payout.createdAt).toLocaleDateString()}
+                    {new Date(payout.createdAt).toLocaleDateString('en-US', {
+                      month: 'short',
+                      day: 'numeric',
+                      year: 'numeric'
+                    })}
                   </p>
                 </div>
               </div>
@@ -504,6 +545,15 @@ export default function AdminPayouts() {
             <h3 className="text-xl font-bold text-gray-900 mb-4">Process Payout</h3>
 
             <div className="space-y-4 mb-6">
+              <div className="bg-blue-50 border border-blue-200 rounded-lg p-3">
+                <p className="text-sm text-blue-800">
+                  <strong>Host:</strong> {hostData[selectedMethod.userId]?.name || 'Unknown'}
+                </p>
+                <p className="text-sm text-blue-800">
+                  <strong>Unpaid Bookings:</strong> {selectedMethod.unpaidBookingCount || 0}
+                </p>
+              </div>
+
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">
                   Account Name
@@ -530,7 +580,7 @@ export default function AdminPayouts() {
 
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Amount (₱)
+                  Amount (₱) <span className="text-red-600">*</span>
                 </label>
                 <input
                   type="number"
@@ -538,6 +588,7 @@ export default function AdminPayouts() {
                   onChange={(e) => setPayoutForm(prev => ({ ...prev, amount: e.target.value }))}
                   className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
                 />
+                <p className="text-xs text-gray-600 mt-1">Host earnings after 5% service fee deduction</p>
               </div>
 
               <div>
@@ -551,7 +602,7 @@ export default function AdminPayouts() {
                   placeholder="e.g., GCash-2025-001, TRX-12345"
                   className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
                 />
-                <p className="text-xs text-gray-600 mt-1">Enter GCash transaction reference number for tracking</p>
+                <p className="text-xs text-gray-600 mt-1">Enter GCash transaction reference number</p>
               </div>
 
               <div>
@@ -572,12 +623,23 @@ export default function AdminPayouts() {
               <button
                 onClick={handleProcessPayout}
                 disabled={processingId === selectedMethod.methodId}
-                className="flex-1 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-400 text-white px-4 py-2 rounded-lg font-medium transition"
+                className="flex-1 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-400 text-white px-4 py-2 rounded-lg font-medium transition flex items-center justify-center gap-2"
               >
-                {processingId === selectedMethod.methodId ? 'Processing...' : 'Process Payout'}
+                {processingId === selectedMethod.methodId ? (
+                  <>
+                    <Loader className="w-4 h-4 animate-spin" />
+                    <span>Processing...</span>
+                  </>
+                ) : (
+                  <>
+                    <Send className="w-4 h-4" />
+                    <span>Process Payout</span>
+                  </>
+                )}
               </button>
               <button
                 onClick={() => setShowPayoutModal(false)}
+                disabled={processingId === selectedMethod.methodId}
                 className="flex-1 bg-gray-200 hover:bg-gray-300 text-gray-700 px-4 py-2 rounded-lg font-medium transition"
               >
                 Cancel
@@ -612,10 +674,18 @@ export default function AdminPayouts() {
               </div>
 
               <div>
-                <p className="text-xs font-medium text-gray-600 uppercase">Unpaid Earnings</p>
+                <p className="text-xs font-medium text-gray-600 uppercase">Unpaid Bookings</p>
                 <p className="text-lg font-semibold text-gray-900">
+                  {selectedForDetails?.unpaidBookingCount || 0}
+                </p>
+              </div>
+
+              <div>
+                <p className="text-xs font-medium text-gray-600 uppercase">Amount to Pay (Host Earnings)</p>
+                <p className="text-2xl font-bold text-green-600">
                   ₱{(selectedForDetails?.earnings || 0).toLocaleString()}
                 </p>
+                <p className="text-xs text-gray-500 mt-1">After 5% service fee deduction</p>
               </div>
 
               <div>
@@ -624,6 +694,17 @@ export default function AdminPayouts() {
                   {getStatusIcon(selectedForDetails?.verified)}
                   {selectedForDetails?.verified ? 'Verified' : 'Pending'}
                 </span>
+              </div>
+
+              <div>
+                <p className="text-xs font-medium text-gray-600 uppercase">Added On</p>
+                <p className="text-sm text-gray-900">
+                  {new Date(selectedForDetails?.addedAt).toLocaleDateString('en-US', {
+                    month: 'long',
+                    day: 'numeric',
+                    year: 'numeric'
+                  })}
+                </p>
               </div>
             </div>
 
