@@ -1,8 +1,10 @@
 import { useState, useEffect, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { Send, ArrowLeft, User } from 'lucide-react';
-import { auth } from '../firebase/firebase';
+import { Send, ArrowLeft, User, Flag, Shield } from 'lucide-react';
+import { auth, db } from '../firebase/firebase';
+import { doc, getDoc } from 'firebase/firestore';
 import { sendMessage, listenToMessages, getChatDetails, markChatAsRead } from '../utils/chatService';
+import FileAReportModal from '../components/reusables/FileAReportModal';
 
 const Chat = () => {
   const { chatId } = useParams();
@@ -13,7 +15,9 @@ const Chat = () => {
   const [sending, setSending] = useState(false);
   const [chatDetails, setChatDetails] = useState(null);
   const [otherUser, setOtherUser] = useState(null);
+  const [loadingUser, setLoadingUser] = useState(true);
   const [error, setError] = useState(null);
+  const [showReportModal, setShowReportModal] = useState(false);
   const messagesEndRef = useRef(null);
   const currentUser = auth.currentUser;
 
@@ -26,6 +30,54 @@ const Chat = () => {
     scrollToBottom();
   }, [messages]);
 
+  // Fetch user details from Firestore Users collection
+  const fetchUserDetails = async (userId) => {
+    try {
+      const userRef = doc(db, 'users', userId);
+      const userSnap = await getDoc(userRef);
+      
+      if (userSnap.exists()) {
+        const userData = userSnap.data();
+        
+        return {
+          id: userId,
+          name: userData.name || 'User',
+          email: userData.email || '',
+          photoUrl: userData.photoUrl || null,
+          location: userData.location || '',
+          phone: userData.phone || '',
+          role: userData.role || 'guest',
+          idVerificationStatus: userData.idVerificationStatus || 'pending',
+          idType: userData.idType || null,
+          createdAt: userData.createdAt || null
+        };
+      } else {
+        return {
+          id: userId,
+          name: 'User',
+          email: '',
+          photoUrl: null,
+          location: '',
+          phone: '',
+          role: 'guest',
+          idVerificationStatus: 'pending'
+        };
+      }
+    } catch (error) {
+      console.error('Error fetching user details:', error);
+      return {
+        id: userId,
+        name: 'User',
+        email: '',
+        photoUrl: null,
+        location: '',
+        phone: '',
+        role: 'guest',
+        idVerificationStatus: 'pending'
+      };
+    }
+  };
+
   // Fetch chat details and other user info
   useEffect(() => {
     const fetchChatInfo = async () => {
@@ -34,30 +86,59 @@ const Chat = () => {
         return;
       }
 
+      setLoadingUser(true);
       try {
         const chat = await getChatDetails(chatId);
         setChatDetails(chat);
 
-        // Get other user ID from participants
-        let otherUserId = null;
-        
-        if (chat.participants && typeof chat.participants === 'object') {
-          const participantIds = Object.keys(chat.participants).filter(id => id !== 'true' && id !== 'false');
-          otherUserId = participantIds.find(uid => uid !== currentUser.uid);
-        } else if (chat.users && Array.isArray(chat.users)) {
-          otherUserId = chat.users.find(uid => uid !== currentUser.uid);
-        }
+        // Helper function to get other user ID
+        const getOtherUserId = (chat, currentUserId) => {
+          const participants = new Set();
+
+          // Method 1: Check participants object
+          if (chat.participants && typeof chat.participants === 'object') {
+            Object.keys(chat.participants).forEach(id => {
+              if (id !== 'true' && id !== 'false' && id !== currentUserId && chat.participants[id] === true) {
+                participants.add(id);
+              }
+            });
+          }
+
+          // Method 2: Check hostId and guestId
+          if (chat.hostId && chat.hostId !== currentUserId) {
+            participants.add(chat.hostId);
+          }
+          if (chat.guestId && chat.guestId !== currentUserId) {
+            participants.add(chat.guestId);
+          }
+
+          // Method 3: Check users array (legacy)
+          if (chat.users && Array.isArray(chat.users)) {
+            chat.users.forEach(id => {
+              if (id !== currentUserId) {
+                participants.add(id);
+              }
+            });
+          }
+
+          const participantArray = Array.from(participants);
+          return participantArray.length > 0 ? participantArray[0] : null;
+        };
+
+        // Get other user ID using the helper function
+        const otherUserId = getOtherUserId(chat, currentUser.uid);
         
         if (otherUserId) {
-          setOtherUser({
-            id: otherUserId,
-            name: 'User'
-          });
+          // Fetch full user details from Firestore Users collection
+          const userDetails = await fetchUserDetails(otherUserId);
+          setOtherUser(userDetails);
         } else {
           setError('Could not load chat participant information');
         }
       } catch (err) {
         setError('Failed to load chat: ' + err.message);
+      } finally {
+        setLoadingUser(false);
       }
     };
 
@@ -167,6 +248,16 @@ const Chat = () => {
     return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
   };
 
+  // Get user initials for avatar
+  const getUserInitials = (name) => {
+    if (!name || name === 'User') return 'U';
+    const names = name.trim().split(' ');
+    if (names.length >= 2) {
+      return `${names[0][0]}${names[1][0]}`.toUpperCase();
+    }
+    return name.substring(0, 2).toUpperCase();
+  };
+
   if (!currentUser) {
     return null;
   }
@@ -183,14 +274,74 @@ const Chat = () => {
         </button>
         
         <div className="flex items-center gap-3 flex-1">
-          <div className="w-10 h-10 bg-blue-600 rounded-full flex items-center justify-center text-white font-semibold">
-            <User className="w-6 h-6" />
+          {loadingUser ? (
+            <div className="w-10 h-10 bg-gray-200 rounded-full animate-pulse"></div>
+          ) : otherUser?.photoUrl ? (
+            <img
+              src={otherUser.photoUrl}
+              alt={otherUser.name}
+              className="w-10 h-10 rounded-full object-cover"
+            />
+          ) : (
+            <div className="w-10 h-10 bg-blue-600 rounded-full flex items-center justify-center text-white font-semibold text-sm">
+              {getUserInitials(otherUser?.name)}
+            </div>
+          )}
+          <div className="flex-1 min-w-0">
+            {loadingUser ? (
+              <div className="space-y-1">
+                <div className="h-4 bg-gray-200 rounded w-32 animate-pulse"></div>
+                <div className="h-3 bg-gray-200 rounded w-24 animate-pulse"></div>
+              </div>
+            ) : (
+              <>
+                <h2 className="font-semibold text-gray-900 truncate">
+                  {otherUser?.name || 'Chat'}
+                </h2>
+                <div className="flex items-center gap-2">
+                  <p className="text-xs text-gray-500 truncate">
+                    {otherUser?.location || 'Online'}
+                  </p>
+                  {otherUser?.idVerificationStatus === 'approved' && (
+                    <span className="inline-flex items-center text-xs text-green-600">
+                      <svg className="w-3 h-3 mr-0.5" fill="currentColor" viewBox="0 0 20 20">
+                        <path fillRule="evenodd" d="M6.267 3.455a3.066 3.066 0 001.745-.723 3.066 3.066 0 013.976 0 3.066 3.066 0 001.745.723 3.066 3.066 0 012.812 2.812c.051.643.304 1.254.723 1.745a3.066 3.066 0 010 3.976 3.066 3.066 0 00-.723 1.745 3.066 3.066 0 01-2.812 2.812 3.066 3.066 0 00-1.745.723 3.066 3.066 0 01-3.976 0 3.066 3.066 0 00-1.745-.723 3.066 3.066 0 01-2.812-2.812 3.066 3.066 0 00-.723-1.745 3.066 3.066 0 010-3.976 3.066 3.066 0 00.723-1.745 3.066 3.066 0 012.812-2.812zm7.44 5.252a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+                      </svg>
+                      Verified
+                    </span>
+                  )}
+                </div>
+              </>
+            )}
           </div>
-          <div>
-            <h2 className="font-semibold text-gray-900">
-              {otherUser?.name || 'Chat'}
-            </h2>
-            <p className="text-xs text-gray-500">Online</p>
+        </div>
+
+        <button
+          onClick={() => setShowReportModal(true)}
+          className="p-2 hover:bg-red-50 rounded-lg transition-colors group"
+          title="Report user"
+          disabled={loadingUser}
+        >
+          <Flag className="w-5 h-5 text-gray-600 group-hover:text-red-600" />
+        </button>
+      </div>
+
+      {/* Safety Warning Banner */}
+      <div className="bg-blue-50 border-b border-blue-200 px-4 py-3">
+        <div className="flex items-start gap-3 max-w-4xl mx-auto">
+          <Shield className="w-5 h-5 text-blue-600 flex-shrink-0 mt-0.5" />
+          <div className="flex-1">
+            <p className="text-sm text-blue-900">
+              <span className="font-semibold">Stay Safe:</span> To avoid scams, make sure to book using Cardnd. 
+              If the user tries to book not from the app, you can{' '}
+              <button 
+                onClick={() => setShowReportModal(true)}
+                className="font-semibold underline hover:text-blue-700"
+                disabled={loadingUser}
+              >
+                report them
+              </button>.
+            </p>
           </div>
         </div>
       </div>
@@ -272,6 +423,15 @@ const Chat = () => {
           </button>
         </form>
       </div>
+
+      {/* Report Modal */}
+      <FileAReportModal
+        isOpen={showReportModal}
+        onClose={() => setShowReportModal(false)}
+        chatId={chatId}
+        reportedUserId={otherUser?.id}
+        reportedUserName={otherUser?.name}
+      />
     </div>
   );
 };

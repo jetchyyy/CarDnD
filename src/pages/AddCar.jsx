@@ -5,8 +5,9 @@ import { Save, AlertCircle, Loader2 } from 'lucide-react';
 import ImageUploader from '../components/ImageUploader';
 import { auth } from '../firebase/firebase';
 import { addVehicle, formatVehicleData } from '../utils/vehicleService';
+import SuccessModal from '../components/reusables/SuccessModal';
 
-const AddCar = () => {
+const AddCar = ({ onSuccess }) => {
   const navigate = useNavigate();
   const [formData, setFormData] = useState({
     name: '',
@@ -27,6 +28,7 @@ const AddCar = () => {
   const [images, setImages] = useState([]);
   const [errors, setErrors] = useState({});
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [showSuccessModal, setShowSuccessModal] = useState(false);
 
   const featuresList = [
     { key: 'ac', label: 'Air Conditioning' },
@@ -105,10 +107,21 @@ const AddCar = () => {
       console.log('Vehicle added successfully with ID:', vehicleId);
       
       // Show success message
-      alert('Car listed successfully!');
+      setShowSuccessModal(true);
+
+      // Wait 2 seconds for user to see success message
+      setTimeout(() => {
+        setShowSuccessModal(false);
+        
+        // Close the parent modal if callback provided
+        if (onSuccess) {
+          onSuccess();
+        }
+        
+        // Navigate to host dashboard
+        navigate('/host/dashboard');
+      }, 2000);
       
-      // Navigate to host dashboard
-      navigate('/host/dashboard');
     } catch (error) {
       console.error('Error submitting vehicle:', error);
       setErrors({ submit: error.message || 'Failed to add vehicle. Please try again.' });
@@ -353,14 +366,14 @@ const AddCar = () => {
               <div className="space-y-6">
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Description *
+                    Description and Requirements *
                   </label>
                   <textarea
                     name="description"
                     value={formData.description}
                     onChange={handleInputChange}
                     rows="4"
-                    placeholder="Describe your car, its condition, and any special features..."
+                    placeholder="Describe your car, its condition, and any special features. Also, include your requirements that renters must bring to rent your car (e.g., valid driver's license, two valid IDs, and a security deposit)."
                     disabled={isSubmitting}
                     className={`w-full px-4 py-2.5 border ${errors.description ? 'border-red-500' : 'border-gray-300'} rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-gray-900 disabled:bg-gray-100`}
                   />
@@ -429,7 +442,13 @@ const AddCar = () => {
               </button>
               <button
                 type="button"
-                onClick={() => navigate('/host/dashboard')}
+                onClick={() => {
+                  if (onSuccess) {
+                    onSuccess();
+                  } else {
+                    navigate('/host/dashboard');
+                  }
+                }}
                 disabled={isSubmitting}
                 className="px-8 bg-gray-100 hover:bg-gray-200 disabled:bg-gray-50 text-gray-700 font-semibold py-3 rounded-lg transition-colors"
               >
@@ -439,6 +458,12 @@ const AddCar = () => {
           </form>
         </div>
       </div>
+      <SuccessModal
+        isOpen={showSuccessModal}
+        onClose={() => setShowSuccessModal(false)}  
+        title="Car Listed Successfully!"  
+        message="Your car has been listed successfully. You can now manage your listing from your host dashboard."  
+      />
     </div>
   );
 };

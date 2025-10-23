@@ -1,11 +1,31 @@
-import { useState } from 'react';
-import { ChevronLeft, ChevronRight } from 'lucide-react';
+import { useState, useEffect } from 'react';
+import { ChevronLeft, ChevronRight, X, Loader2 } from 'lucide-react';
+import { getDisabledDates } from '../utils/availabilityService';
 
 const GuestBookingCalendar = ({ vehicle, bookings }) => {
   const [currentDate, setCurrentDate] = useState(new Date(new Date().getFullYear(), new Date().getMonth(), 1));
+  const [disabledDates, setDisabledDates] = useState([]);
+  const [loading, setLoading] = useState(true);
 
   // Filter confirmed bookings for this vehicle only
   const vehicleBookings = bookings.filter(b => b.carId === vehicle.id && b.status === 'confirmed');
+
+  // Load disabled dates on mount
+  useEffect(() => {
+    loadDisabledDates();
+  }, [vehicle.id]);
+
+  const loadDisabledDates = async () => {
+    try {
+      setLoading(true);
+      const dates = await getDisabledDates(vehicle.id);
+      setDisabledDates(dates);
+    } catch (error) {
+      console.error('Error loading disabled dates:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   // Get days in month
   const getDaysInMonth = (date) => {
@@ -30,6 +50,12 @@ const GuestBookingCalendar = ({ vehicle, bookings }) => {
       
       return current >= start && current <= end;
     });
+  };
+
+  // Check if a date is disabled by host
+  const isDateDisabled = (day) => {
+    const dateStr = new Date(currentDate.getFullYear(), currentDate.getMonth(), day).toISOString().split('T')[0];
+    return disabledDates.includes(dateStr);
   };
 
   // Check if a date is in the past
@@ -64,11 +90,12 @@ const GuestBookingCalendar = ({ vehicle, bookings }) => {
     setCurrentDate(new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, 1));
   };
 
-  const getAvailableDatesCount = () => {
-    const futureBookedDates = new Set();
+  const getUnavailableDatesCount = () => {
+    const unavailableDates = new Set();
     const today = new Date();
     today.setHours(0, 0, 0, 0);
 
+    // Count booked dates
     vehicleBookings.forEach(booking => {
       const start = new Date(booking.startDate);
       const end = new Date(booking.endDate);
@@ -77,13 +104,33 @@ const GuestBookingCalendar = ({ vehicle, bookings }) => {
 
       for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
         if (d >= today) {
-          futureBookedDates.add(d.toDateString());
+          unavailableDates.add(d.toDateString());
         }
       }
     });
 
-    return futureBookedDates.size;
+    // Count disabled dates (future only)
+    disabledDates.forEach(dateStr => {
+      const date = new Date(dateStr);
+      date.setHours(0, 0, 0, 0);
+      if (date >= today) {
+        unavailableDates.add(date.toDateString());
+      }
+    });
+
+    return unavailableDates.size;
   };
+
+  if (loading) {
+    return (
+      <div className="bg-white rounded-xl shadow-md p-6 mb-6">
+        <div className="flex items-center justify-center py-12">
+          <Loader2 className="w-8 h-8 animate-spin text-blue-600" />
+          <span className="ml-2 text-gray-600">Loading calendar...</span>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="bg-white rounded-xl shadow-md p-6 mb-6">
@@ -95,7 +142,7 @@ const GuestBookingCalendar = ({ vehicle, bookings }) => {
         <div className="flex items-center justify-between">
           <p className="text-sm text-gray-600">₱{vehicle.pricePerDay}/day</p>
           <p className="text-sm text-gray-600">
-            <span className="font-semibold text-red-600">{getAvailableDatesCount()}</span> days booked ahead
+            <span className="font-semibold text-red-600">{getUnavailableDatesCount()}</span> days unavailable
           </p>
         </div>
       </div>
@@ -132,6 +179,7 @@ const GuestBookingCalendar = ({ vehicle, bookings }) => {
       <div className="grid grid-cols-7 gap-1 mb-6">
         {days.map((day, index) => {
           const booked = day ? isDateBooked(day) : false;
+          const disabled = day ? isDateDisabled(day) : false;
           const isPast = day ? isDateInPast(day) : false;
           
           return (
@@ -140,15 +188,33 @@ const GuestBookingCalendar = ({ vehicle, bookings }) => {
               className={`h-14 rounded-lg border flex items-center justify-center transition-all text-sm font-medium ${
                 day === null
                   ? 'bg-gray-50 border-transparent'
+                  : disabled
+                  ? 'bg-gray-800 border-gray-700 text-white cursor-not-allowed relative'
                   : booked
                   ? 'bg-red-100 border-red-300 text-red-700 cursor-not-allowed'
                   : isPast
                   ? 'bg-gray-100 border-gray-300 text-gray-500 cursor-not-allowed'
                   : 'bg-green-50 border-green-300 text-green-700 hover:bg-green-100 cursor-pointer'
               }`}
-              title={day && booked ? 'Booked' : day && isPast ? 'Past date' : day ? 'Available' : ''}
+              title={
+                day && disabled 
+                  ? 'Blocked by host' 
+                  : day && booked 
+                  ? 'Booked' 
+                  : day && isPast 
+                  ? 'Past date' 
+                  : day 
+                  ? 'Available' 
+                  : ''
+              }
             >
-              {day}
+              {day && disabled ? (
+                <div className="relative">
+                  <span>{day}</span>
+                </div>
+              ) : (
+                day
+              )}
             </div>
           );
         })}
@@ -163,6 +229,12 @@ const GuestBookingCalendar = ({ vehicle, bookings }) => {
         <div className="flex items-center gap-2">
           <div className="w-4 h-4 bg-red-100 border border-red-300 rounded"></div>
           <span className="text-gray-600">Booked</span>
+        </div>
+        <div className="flex items-center gap-2">
+          <div className="w-4 h-4 bg-gray-800 rounded flex items-center justify-center">
+            <X className="w-3 h-3 text-white" />
+          </div>
+          <span className="text-gray-600">Not Available</span>
         </div>
         <div className="flex items-center gap-2">
           <div className="w-4 h-4 bg-gray-100 border border-gray-300 rounded"></div>

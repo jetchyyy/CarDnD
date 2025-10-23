@@ -97,31 +97,30 @@ export const AuthProvider = ({ children }) => {
   };
 
   const login = async (email, password) => {
-  try {
-    const response = await fetch("http:/auth/login", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ email, password }),
-      credentials: "include",
-    });
+    try {
+      const response = await fetch("http:/auth/login", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email, password }),
+        credentials: "include",
+      });
 
-    const data = await response.json();
-    console.log(data.message);
+      const data = await response.json();
+      console.log(data.message);
 
-    if (!data.success) {
+      if (!data.success) {
+        return data;
+      }
+
+      // ✅ Use custom token, not ID token
+      await signInWithCustomToken(auth, data.customToken);
+
       return data;
+    } catch (err) {
+      console.error("Login error:", err);
+      return { success: false, error: err.message };
     }
-
-    // ✅ Use custom token, not ID token
-    await signInWithCustomToken(auth, data.customToken);
-
-    return data;
-  } catch (err) {
-    console.error("Login error:", err);
-    return { success: false, error: err.message };
-  }
-  }
-
+  };
 
   const signup = async (email, password, fullName, role = 'guest') => {
     try {
@@ -274,6 +273,18 @@ export const AuthProvider = ({ children }) => {
     switchRole,
     updateProfile
   };
+
+  // Show loading screen while checking auth state
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center min-h-screen bg-gray-50">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
+          <p className="text-gray-600">Loading...</p>
+        </div>
+      </div>
+    );
+  }
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 };

@@ -49,6 +49,7 @@ export const createBooking = async (bookingData) => {
     // Calculate service fee (5% of total price)
     const serviceFeePercentage = 0.05;
     const serviceFeeAmount = bookingData.totalPrice * serviceFeePercentage;
+    const hostEarnings = bookingData.totalPrice - serviceFeeAmount; // What host receives
 
     const booking = {
       carId: bookingData.carId,
@@ -56,9 +57,11 @@ export const createBooking = async (bookingData) => {
       hostId: bookingData.hostId,
       startDate: bookingData.startDate,
       endDate: bookingData.endDate,
-      totalPrice: bookingData.totalPrice,
+      totalPrice: bookingData.totalPrice, // Total paid by guest
+      hostEarnings: hostEarnings, // Amount owed to host (after service fee)
       status: 'confirmed',
       createdAt: new Date().toISOString(),
+      paidOutAt: null, // Initialize as null - will be set when admin processes payout
       vehicleDetails: {
         title: bookingData.vehicleTitle,
         type: bookingData.vehicleType,
@@ -88,6 +91,7 @@ export const createBooking = async (bookingData) => {
       amount: serviceFeeAmount,
       percentage: serviceFeePercentage * 100,
       baseAmount: bookingData.totalPrice,
+      hostEarnings: hostEarnings, // Track what host should receive
       status: 'collected',
       collectedAt: new Date().toISOString(),
       month: new Date().getMonth() + 1,
@@ -99,7 +103,8 @@ export const createBooking = async (bookingData) => {
     await addDoc(collection(db, 'serviceFees'), serviceFeeRecord);
 
     console.log('Booking created successfully with ID:', bookingId);
-    console.log('Service fee recorded:', serviceFeeAmount);
+    console.log('Service fee collected:', serviceFeeAmount);
+    console.log('Host will receive:', hostEarnings);
 
     return bookingId;
   } catch (error) {
@@ -219,6 +224,46 @@ export const checkAvailability = async (vehicleId, startDate, endDate) => {
     return true;
   } catch (error) {
     console.error('Error checking availability:', error);
+    throw error;
+  }
+};
+
+/**
+ * Get unpaid earnings for a specific host
+ * @param {string} hostId - Host user ID
+ * @returns {Promise<Object>} Object with totalEarnings and bookingIds
+ */
+export const getHostUnpaidEarnings = async (hostId) => {
+  try {
+    const q = query(
+      collection(db, 'bookings'),
+      where('hostId', '==', hostId),
+      where('status', '==', 'confirmed')
+    );
+
+    const snapshot = await getDocs(q);
+    let totalEarnings = 0;
+    const unpaidBookings = [];
+
+    snapshot.forEach((doc) => {
+      const booking = doc.data();
+      // Only count if not yet paid out
+      if (!booking.paidOutAt) {
+        totalEarnings += (booking.hostEarnings || 0);
+        unpaidBookings.push({
+          id: doc.id,
+          ...booking
+        });
+      }
+    });
+
+    return {
+      totalEarnings,
+      unpaidBookings,
+      count: unpaidBookings.length
+    };
+  } catch (error) {
+    console.error('Error fetching host unpaid earnings:', error);
     throw error;
   }
 };

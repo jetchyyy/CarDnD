@@ -13,16 +13,20 @@ import {
   ChevronLeft,
   ChevronRight,
   X,
-  MessageCircle
+  MessageCircle,
+  Lock,
+  AlertCircle
 } from 'lucide-react';
 import GuestBookingCalendar from '../components/GuestBookingCalendar';
 import { db, auth } from '../firebase/firebase';
 import { doc, getDoc, collection, getDocs, query, orderBy, where } from 'firebase/firestore';
 import { createOrGetChat } from '../utils/chatService';
+import { useAuth } from '../context/Authcontext';
 
 const VehicleDetails = () => {
   const { id } = useParams();
   const navigate = useNavigate();
+  const { user } = useAuth();
   const [vehicle, setVehicle] = useState(null);
   const [bookings, setBookings] = useState([]);
   const [reviews, setReviews] = useState([]);
@@ -35,6 +39,11 @@ const VehicleDetails = () => {
     endDate: ''
   });
   const [messageLoading, setMessageLoading] = useState(false);
+
+  // Check if user can book (ID verified)
+  const canBook = user?.idVerificationStatus === 'approved';
+  const isPending = user?.idVerificationStatus === 'pending';
+  const needsVerification = !user?.idVerificationStatus || user?.idVerificationStatus === 'idle' || user?.idVerificationStatus === 'rejected';
 
   // Fetch vehicle details
   useEffect(() => {
@@ -180,6 +189,15 @@ const VehicleDetails = () => {
     const currentUser = auth.currentUser;
     if (!currentUser) {
       navigate('/login', { state: { from: `/vehicles/${id}` } });
+      return;
+    }
+
+    // Check if user is verified
+    if (!canBook) {
+      alert(isPending 
+        ? 'Your ID verification is pending review. You can book once approved (usually 24-48 hours).'
+        : 'Please verify your ID to book vehicles. Go to your profile to submit verification.'
+      );
       return;
     }
 
@@ -482,6 +500,41 @@ const VehicleDetails = () => {
             <div className="bg-white rounded-xl shadow-md p-6 sticky top-24">
               <h3 className="text-xl font-bold text-gray-900 mb-4">Book this vehicle</h3>
               
+              {/* Verification Alert */}
+              {user && !canBook && (
+                <div className={`mb-4 p-4 rounded-lg border ${
+                  isPending 
+                    ? 'bg-yellow-50 border-yellow-300' 
+                    : 'bg-amber-50 border-amber-300'
+                }`}>
+                  <div className="flex items-start">
+                    {isPending ? (
+                      <AlertCircle className="w-5 h-5 text-yellow-600 mr-2 flex-shrink-0 mt-0.5" />
+                    ) : (
+                      <Lock className="w-5 h-5 text-amber-600 mr-2 flex-shrink-0 mt-0.5" />
+                    )}
+                    <div>
+                      <p className="text-sm font-semibold text-gray-900">
+                        {isPending ? 'ID Verification Pending' : 'ID Verification Required'}
+                      </p>
+                      <p className="text-xs text-gray-700 mt-1">
+                        {isPending 
+                          ? 'Your ID is being reviewed. You can book once approved (usually 24-48 hours).'
+                          : 'Please verify your ID to book vehicles.'}
+                      </p>
+                      {needsVerification && (
+                        <button
+                          onClick={() => navigate('/profile')}
+                          className="mt-2 text-xs font-semibold text-blue-600 hover:text-blue-700"
+                        >
+                          Go to Profile →
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              )}
+              
               <div className="mb-4">
                 <label className="block text-sm font-medium text-gray-700 mb-2">
                   Start Date
@@ -491,7 +544,8 @@ const VehicleDetails = () => {
                   value={bookingDates.startDate}
                   onChange={(e) => setBookingDates(prev => ({ ...prev, startDate: e.target.value }))}
                   min={new Date().toISOString().split('T')[0]}
-                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  disabled={!user || !canBook}
+                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent disabled:bg-gray-100 disabled:cursor-not-allowed"
                 />
               </div>
 
@@ -504,7 +558,8 @@ const VehicleDetails = () => {
                   value={bookingDates.endDate}
                   onChange={(e) => setBookingDates(prev => ({ ...prev, endDate: e.target.value }))}
                   min={bookingDates.startDate || new Date().toISOString().split('T')[0]}
-                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  disabled={!user || !canBook}
+                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent disabled:bg-gray-100 disabled:cursor-not-allowed"
                 />
               </div>
 
@@ -521,10 +576,15 @@ const VehicleDetails = () => {
 
               <button
                 onClick={handleBooking}
-                disabled={!bookingDates.startDate || !bookingDates.endDate}
-                className="w-full bg-blue-600 hover:bg-blue-700 disabled:bg-gray-400 text-white font-semibold py-3 rounded-lg transition-colors"
+                disabled={!user || !canBook || !bookingDates.startDate || !bookingDates.endDate}
+                className={`w-full font-semibold py-3 rounded-lg transition-colors flex items-center justify-center ${
+                  !user || !canBook || !bookingDates.startDate || !bookingDates.endDate
+                    ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
+                    : 'bg-blue-600 hover:bg-blue-700 text-white'
+                }`}
               >
-                Continue to Booking
+                {user && !canBook && <Lock className="w-5 h-5 mr-2" />}
+                {!user ? 'Login to Book' : 'Continue to Booking'}
               </button>
 
               <p className="text-xs text-gray-500 text-center mt-4">

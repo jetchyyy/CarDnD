@@ -1,3 +1,4 @@
+// BookingConfirmation.jsx
 import { useState, useEffect } from 'react';
 import { useLocation, useNavigate, useParams } from 'react-router-dom';
 import { 
@@ -7,10 +8,15 @@ import {
   Shield, 
   CheckCircle,
   AlertCircle,
-  Loader2
+  Loader2,
+  Info
 } from 'lucide-react';
 import { auth } from '../firebase/firebase';
-import { createBooking, checkAvailability, uploadPayment } from '../utils/bookingService';
+import { createBooking, uploadPayment } from '../utils/bookingService';
+import { 
+  checkAvailabilityWithDisabledDates, 
+  getAvailabilityErrorMessage 
+} from '../utils/availabilityService';
 import PaymentModal from '../components/PaymentModal';
 import emailjs from 'emailjs-com';
 
@@ -23,8 +29,7 @@ const BookingConfirmation = () => {
   const [isChecking, setIsChecking] = useState(true);
   const [showPayment, setShowPayment] = useState(false);
 
-  const qrCodeUrl = "Images"
-
+  const qrCodeUrl = "Images"; // Replace with your actual QR code URL
 
   const { vehicle, bookingDates, totalPrice } = location.state || {};
 
@@ -42,18 +47,20 @@ const BookingConfirmation = () => {
       return;
     }
 
-    // Check availability
+    // Check availability including disabled dates
     const verifyAvailability = async () => {
       setIsChecking(true);
+      setError('');
       try {
-        const isAvailable = await checkAvailability(
+        const availabilityResult = await checkAvailabilityWithDisabledDates(
           vehicle.id,
           bookingDates.startDate,
           bookingDates.endDate
         );
 
-        if (!isAvailable) {
-          setError('Sorry, this vehicle is not available for the selected dates.');
+        if (!availabilityResult.available) {
+          const errorMsg = getAvailabilityErrorMessage(availabilityResult);
+          setError(errorMsg);
         }
       } catch (err) {
         console.error('Error checking availability:', err);
@@ -84,20 +91,23 @@ const BookingConfirmation = () => {
     setError('');
 
     try {
-      // Check availability one more time before booking
-      const isAvailable = await checkAvailability(
+      // Check availability one more time before booking (including disabled dates)
+      const availabilityResult = await checkAvailabilityWithDisabledDates(
         vehicle.id,
         bookingDates.startDate,
         bookingDates.endDate
       );
 
-      if (!isAvailable) {
-        setError('Sorry, this vehicle is no longer available for the selected dates.');
+      if (!availabilityResult.available) {
+        const errorMsg = getAvailabilityErrorMessage(availabilityResult);
+        setError(errorMsg);
+        setShowPayment(false);
         setLoading(false);
         return;
       }
-       const paymentId = `${currentUser.uid}_${Date.now()}`;
-       const imageUrls = await uploadPayment(proof, paymentId);
+
+      const paymentId = `${currentUser.uid}_${Date.now()}`;
+      const imageUrls = await uploadPayment(proof, paymentId);
        
       const bookingData = {
         carId: vehicle.id,
@@ -112,7 +122,6 @@ const BookingConfirmation = () => {
         guestName: currentUser.displayName || currentUser.email?.split('@')[0] || 'Guest',
         guestEmail: currentUser.email,
         paymentReceipt: imageUrls[0],
-
       };
       
       const bookingId = await createBooking(bookingData);
@@ -155,6 +164,7 @@ const BookingConfirmation = () => {
     } catch (err) {
       console.error('Error creating booking:', err);
       setError('Failed to create booking. Please try again.');
+      setShowPayment(false);
     } finally {
       setLoading(false);
     }
@@ -164,6 +174,7 @@ const BookingConfirmation = () => {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
         <div className="text-center">
+          <Loader2 className="w-12 h-12 animate-spin text-blue-600 mx-auto mb-4" />
           <p className="text-gray-600">Loading booking details...</p>
         </div>
       </div>
@@ -172,11 +183,9 @@ const BookingConfirmation = () => {
 
   const days = calculateDays();
   
+  // Service fee is deducted from total price (not added to guest payment)
   const serviceFee = totalPrice * 0.05;
-  const formattedServiceFee = serviceFee.toLocaleString("en-PH", {
-    style: "currency",
-    currency: "PHP",
-  });
+  const hostEarnings = totalPrice - serviceFee;
 
   return (
     <div className="min-h-screen bg-gray-50 py-12">
@@ -189,14 +198,18 @@ const BookingConfirmation = () => {
         {error && (
           <div className="mb-6 p-4 bg-red-50 border border-red-200 rounded-lg flex items-start">
             <AlertCircle className="w-5 h-5 text-red-600 mr-2 flex-shrink-0 mt-0.5" />
-            <p className="text-red-700">{error}</p>
+            <div className="flex-1">
+              <p className="text-red-700 font-semibold mb-1">Booking Not Available</p>
+              <p className="text-red-600 text-sm">{error}</p>
+            </div>
           </div>
         )}
 
         {isChecking ? (
           <div className="bg-white rounded-xl shadow-md p-8 text-center">
             <Loader2 className="w-12 h-12 animate-spin text-blue-600 mx-auto mb-4" />
-            <p className="text-gray-600">Checking availability...</p>
+            <p className="text-gray-600">Verifying availability...</p>
+            <p className="text-sm text-gray-500 mt-2">Checking for disabled dates and existing bookings</p>
           </div>
         ) : (
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
@@ -308,23 +321,19 @@ const BookingConfirmation = () => {
                     <span>₱{vehicle.pricePerDay} × {days} {days === 1 ? 'day' : 'days'}</span>
                     <span>₱{vehicle.pricePerDay * days}</span>
                   </div>
-                  <div className="flex justify-between text-gray-600">
-                    <span>Service fee</span>
-                    <span>{formattedServiceFee}</span>
-                  </div>
                 </div>
 
-                <div className="border-t border-gray-200 pt-4 mb-6">
+                <div className="border-t border-gray-200 pt-4 mb-4">
                   <div className="flex justify-between text-lg font-bold text-gray-900">
                     <span>Total</span>
-                    <span>₱{totalPrice + serviceFee}</span>
+                    <span>₱{totalPrice.toLocaleString()}</span>
                   </div>
                 </div>
 
                 <button
-                  onClick={()=>setShowPayment(true)}
-                  disabled={loading || error}
-                  className="w-full bg-blue-600 hover:bg-blue-700 disabled:bg-gray-400 text-white font-semibold py-3 rounded-lg transition-colors flex items-center justify-center space-x-2 mb-4"
+                  onClick={() => setShowPayment(true)}
+                  disabled={loading || !!error}
+                  className="w-full bg-blue-600 hover:bg-blue-700 disabled:bg-gray-400 disabled:cursor-not-allowed text-white font-semibold py-3 rounded-lg transition-colors flex items-center justify-center space-x-2 mb-4"
                 >
                   {loading ? (
                     <>
@@ -347,28 +356,39 @@ const BookingConfirmation = () => {
                   Go Back
                 </button>
 
-                <div className="mt-4 p-3 bg-blue-50 rounded-lg">
-                  <div className="flex items-start">
-                    <CreditCard className="w-5 h-5 text-blue-600 mr-2 mt-0.5 flex-shrink-0" />
-                    <p className="text-xs text-gray-600">
-                      Your payment information will be collected securely after booking confirmation
-                    </p>
+                {error && (
+                  <div className="mt-4 p-3 bg-yellow-50 border border-yellow-200 rounded-lg">
+                    <div className="flex items-start">
+                      <Info className="w-5 h-5 text-yellow-600 mr-2 mt-0.5 flex-shrink-0" />
+                      <p className="text-xs text-yellow-800">
+                        These dates are no longer available. Please go back and select different dates.
+                      </p>
+                    </div>
                   </div>
-                </div>
+                )}
+
+                {!error && (
+                  <div className="mt-4 p-3 bg-gray-50 rounded-lg">
+                    <div className="flex items-start">
+                      <CreditCard className="w-5 h-5 text-gray-600 mr-2 mt-0.5 flex-shrink-0" />
+                      <p className="text-xs text-gray-600">
+                        Secure payment via GCash. Upload your payment proof after scanning the QR code.
+                      </p>
+                    </div>
+                  </div>
+                )}
               </div>
             </div>
           </div>
-          
         )}   
       </div>
       <PaymentModal
-      isOpen={showPayment}
-      onClose={() => setShowPayment(false)}
-      amount={totalPrice + serviceFee}
-      qrCodeUrl={qrCodeUrl}
-      onUploadProof={handleConfirmBooking}
+        isOpen={showPayment}
+        onClose={() => setShowPayment(false)}
+        amount={totalPrice}
+        qrCodeUrl={qrCodeUrl}
+        onUploadProof={handleConfirmBooking}
       />
-            
     </div>
   );
 };
