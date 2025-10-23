@@ -37,6 +37,7 @@ const Login = () => {
       } 
     }
   }, [user, navigate, location]);
+  
   useEffect(() => {
   if (cooldown <= 0) return;
   const timer = setInterval(() => {
@@ -45,13 +46,7 @@ const Login = () => {
   return () => clearInterval(timer);
 }, [cooldown]);
 
-  useEffect(() => {
-  if (cooldown <= 0) return;
-  const timer = setInterval(() => {
-    setCooldown((prev) => (prev > 1 ? prev - 1 : 0));
-  }, 1000);
-  return () => clearInterval(timer);
-}, [cooldown]);
+
 
   const handleInputChange = (e) => {
     const { name, value } = e.target;

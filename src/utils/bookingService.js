@@ -15,6 +15,7 @@ import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
  */
 
 export const uploadPayment = async (images, paymentId) => {
+  
   if (!images) throw new Error("No images provided to uploadPayment.");
 
   const files = Array.isArray(images) ? images : [images];
@@ -93,7 +94,7 @@ export const createBooking = async (bookingData) => {
       year: new Date().getFullYear(),
       vehicleTitle: bookingData.vehicleTitle,
     };
-
+ 
     // Add to serviceFees collection
     await addDoc(collection(db, 'serviceFees'), serviceFeeRecord);
 

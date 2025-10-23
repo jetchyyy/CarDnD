@@ -46,7 +46,7 @@ const ProtectedAdminRoute = ({ children }) => {
       </div>
     );
   }
-
+  
   if (!user) {
     return <Navigate to="/login" replace />;
   }

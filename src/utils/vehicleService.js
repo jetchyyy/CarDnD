@@ -79,7 +79,8 @@ export const addVehicle = async (vehicleData, images, hostId) => {
       status: 'available',
       availability: [],
       createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString()
+      updatedAt: new Date().toISOString(),
+      phone_number:currentUser.phone
     };
     
     // Add document to Firestore
