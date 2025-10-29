@@ -1,10 +1,12 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Calendar, MessageSquare, Car, Bike, MapPin, DollarSign, Star } from 'lucide-react';
+import { Calendar, MessageSquare, Car, Bike, MapPin, Star, XCircle } from 'lucide-react';
 import { auth, db } from '../firebase/firebase';
-import { collection, query, where, getDocs, doc, getDoc } from 'firebase/firestore';
+import { collection, query, where, getDocs, doc, getDoc, updateDoc, addDoc } from 'firebase/firestore';
 import { createOrGetChat } from '../utils/chatService';
 import ReviewModal from '../components/ReviewModal';
+import CancellationModal from '../components/reusables/CancellationModal';
+import GuestRefundDetails from '../components/GuestRefundDetails';
 
 const MyBookings = () => {
   const navigate = useNavigate();
@@ -12,15 +14,17 @@ const MyBookings = () => {
   const [loading, setLoading] = useState(true);
   const [messagingLoading, setMessagingLoading] = useState(false);
   const [selectedBookingForReview, setSelectedBookingForReview] = useState(null);
+  const [selectedBookingForCancel, setSelectedBookingForCancel] = useState(null);
   const [reviewedBookings, setReviewedBookings] = useState(new Set());
   const currentUser = auth.currentUser;
 
-  // Fetch host details from Firestore Users collection
   const fetchHostDetails = async (hostId) => {
+    if (!hostId) return { id: '', name: 'Unknown Host', email: '' };
+
     try {
-      const hostRef = doc(db, 'Users', hostId);
+      const hostRef = doc(db, 'users', hostId);
       const hostSnap = await getDoc(hostRef);
-      
+
       if (hostSnap.exists()) {
         const hostData = hostSnap.data();
         return {
@@ -29,17 +33,18 @@ const MyBookings = () => {
           email: hostData.email || '',
           photoUrl: hostData.photoUrl || null,
           location: hostData.location || '',
-          phone: hostData.phone || ''
+          phone: hostData.phone || '',
         };
+      } else {
+        console.warn(`Host document not found for ID: ${hostId}`);
+        return { id: hostId, name: 'Host Not Found', email: '' };
       }
-      return { id: hostId, name: 'Host', email: '' };
     } catch (error) {
       console.error('Error fetching host details:', error);
       return { id: hostId, name: 'Host', email: '' };
     }
   };
 
-  // Fetch vehicle details from Firestore vehicles collection
   const fetchVehicleDetails = async (vehicleId) => {
     try {
       const vehicleRef = doc(db, 'vehicles', vehicleId);
@@ -79,11 +84,9 @@ const MyBookings = () => {
         );
         const snapshot = await getDocs(q);
         
-        // Fetch all bookings with complete details
         const bookingPromises = snapshot.docs.map(async (docSnap) => {
           const bookingData = docSnap.data();
           
-          // Fetch complete vehicle details first to get the owner info
           let vehicleDetails = bookingData.vehicleDetails || {};
           if (bookingData.carId) {
             const fullVehicleDetails = await fetchVehicleDetails(bookingData.carId);
@@ -95,16 +98,13 @@ const MyBookings = () => {
             }
           }
 
-          // Use hostId from vehicle if available, otherwise fall back to booking hostId
           const actualHostId = vehicleDetails.hostId || bookingData.hostId;
 
-          // Fetch host details if not already in booking
           let hostDetails = bookingData.hostDetails;
           if (!hostDetails || !hostDetails.name) {
             hostDetails = await fetchHostDetails(actualHostId);
           }
 
-          // Use the owner name from vehicle if available
           if (vehicleDetails.owner && (!hostDetails.name || hostDetails.name === 'Host')) {
             hostDetails = {
               ...hostDetails,
@@ -122,11 +122,9 @@ const MyBookings = () => {
 
         const fetchedBookings = await Promise.all(bookingPromises);
         
-        // Sort by created date, newest first
         fetchedBookings.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
         setBookings(fetchedBookings);
 
-        // Fetch which bookings have been reviewed
         const reviewsQuery = query(
           collection(db, 'reviews'),
           where('guestId', '==', currentUser.uid)
@@ -149,7 +147,6 @@ const MyBookings = () => {
   const handleMessageHost = async (booking) => {
     try {
       setMessagingLoading(true);
-      // Use hostId from vehicle details if available, otherwise use booking hostId
       const actualHostId = booking.vehicleDetails?.hostId || booking.hostId;
       const chatId = await createOrGetChat(
         actualHostId,
@@ -164,8 +161,65 @@ const MyBookings = () => {
     }
   };
 
+  const handleCancelBooking = async (reason, refundInfo) => {
+    try {
+      const bookingRef = doc(db, 'bookings', selectedBookingForCancel.id);
+      
+      // Create cancellation record
+      const cancellationData = {
+        bookingId: selectedBookingForCancel.id,
+        guestId: currentUser.uid,
+        hostId: selectedBookingForCancel.vehicleDetails?.hostId || selectedBookingForCancel.hostId,
+        vehicleId: selectedBookingForCancel.carId,
+        originalAmount: selectedBookingForCancel.totalPrice,
+        refundAmount: refundInfo.refundAmount,
+        refundPercentage: refundInfo.refundPercentage,
+        reason: reason,
+        cancelledAt: new Date().toISOString(),
+        cancelledBy: 'guest',
+        refundStatus: refundInfo.refundAmount > 0 ? 'pending' : 'not_applicable',
+        hoursBeforeBooking: refundInfo.hoursUntilBooking,
+        bookingDetails: {
+          vehicleTitle: selectedBookingForCancel.vehicleDetails?.title,
+          startDate: selectedBookingForCancel.startDate,
+          endDate: selectedBookingForCancel.endDate,
+          guestName: currentUser.displayName || currentUser.email,
+          hostName: selectedBookingForCancel.hostDetails?.name
+        }
+      };
+
+      // Add cancellation record
+      await addDoc(collection(db, 'cancellations'), cancellationData);
+
+      // Update booking status
+      await updateDoc(bookingRef, {
+        status: 'cancelled',
+        cancelledAt: new Date().toISOString(),
+        cancellationReason: reason,
+        refundAmount: refundInfo.refundAmount,
+        refundPercentage: refundInfo.refundPercentage,
+        refundStatus: refundInfo.refundAmount > 0 ? 'pending' : 'not_applicable'
+      });
+
+      alert(`Booking cancelled successfully!\n\nRefund: ₱${refundInfo.refundAmount.toLocaleString()} (${refundInfo.refundPercentage}%)\n\n${refundInfo.refundAmount > 0 ? 'Your refund will be processed by admin within 3-5 business days.' : 'No refund applicable based on cancellation policy.'}`);
+      
+      // Refresh bookings
+      setBookings(prevBookings =>
+        prevBookings.map(b =>
+          b.id === selectedBookingForCancel.id
+            ? { ...b, status: 'cancelled', refundAmount: refundInfo.refundAmount, refundStatus: refundInfo.refundAmount > 0 ? 'pending' : 'not_applicable' }
+            : b
+        )
+      );
+      
+      setSelectedBookingForCancel(null);
+    } catch (error) {
+      console.error('Error canceling booking:', error);
+      throw error;
+    }
+  };
+
   const handleReviewSuccess = () => {
-    // Add booking to reviewed set
     if (selectedBookingForReview) {
       setReviewedBookings(prev => new Set([...prev, selectedBookingForReview.id]));
     }
@@ -202,6 +256,15 @@ const MyBookings = () => {
     return booking.status || 'pending';
   };
 
+  const canCancelBooking = (booking) => {
+    const status = getBookingStatus(booking);
+    if (status === 'cancelled' || status === 'completed') return false;
+    
+    const now = new Date();
+    const startDate = new Date(booking.startDate);
+    return now < startDate; // Can cancel if booking hasn't started yet
+  };
+
   if (!currentUser) {
     return null;
   }
@@ -209,13 +272,11 @@ const MyBookings = () => {
   return (
     <div className="min-h-screen bg-gray-50">
       <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        {/* Header */}
         <div className="mb-8">
           <h1 className="text-3xl font-bold text-gray-900 mb-2">My Bookings</h1>
           <p className="text-gray-600">Manage your vehicle reservations</p>
         </div>
 
-        {/* Bookings List */}
         {loading ? (
           <div className="flex justify-center items-center py-20">
             <div className="text-center">
@@ -244,6 +305,7 @@ const MyBookings = () => {
               const days = Math.ceil((endDate - startDate) / (1000 * 60 * 60 * 24)) || 1;
               const isCompleted = status === 'completed';
               const hasReviewed = reviewedBookings.has(booking.id);
+              const isCancellable = canCancelBooking(booking);
 
               return (
                 <div
@@ -251,7 +313,6 @@ const MyBookings = () => {
                   className="bg-white rounded-xl shadow-md hover:shadow-lg transition-shadow overflow-hidden"
                 >
                   <div className="flex flex-col md:flex-row">
-                    {/* Vehicle Image */}
                     <div className="md:w-48 h-48 md:h-auto flex-shrink-0">
                       <img
                         src={booking.vehicleDetails?.image || 'https://via.placeholder.com/200'}
@@ -260,7 +321,6 @@ const MyBookings = () => {
                       />
                     </div>
 
-                    {/* Booking Details */}
                     <div className="flex-1 p-6 flex flex-col justify-between">
                       <div>
                         <div className="flex items-start justify-between mb-4">
@@ -311,18 +371,48 @@ const MyBookings = () => {
                             </p>
                           </div>
                         </div>
+
+                        {/* Show refund details if processed */}
+                        {booking.status === 'cancelled' && booking.refundStatus === 'processed' && (
+                          <div className="mb-4">
+                            <GuestRefundDetails 
+                              bookingId={booking.id} 
+                              guestId={currentUser.uid} 
+                            />
+                          </div>
+                        )}
+
+                        {/* Show pending refund status */}
+                        {booking.status === 'cancelled' && booking.refundStatus === 'pending' && (
+                          <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-3 mb-4">
+                            <p className="text-sm text-yellow-800">
+                              <strong>Refund Pending:</strong> Your refund of ₱{booking.refundAmount?.toLocaleString() || 0} ({booking.refundPercentage || 0}%) is being processed by admin.
+                            </p>
+                            <p className="text-xs text-yellow-600 mt-1">
+                              This typically takes 3-5 business days. You will be notified once the refund is sent.
+                            </p>
+                          </div>  
+                        )}
+
+                        {/* Show no refund message */}
+                        {booking.status === 'cancelled' && booking.refundStatus === 'not_applicable' && (
+                          <div className="bg-gray-50 border border-gray-200 rounded-lg p-3 mb-4">
+                            <p className="text-sm text-gray-700">
+                              <strong>Cancelled:</strong> No refund applicable based on cancellation policy.
+                            </p>
+                          </div>  
+                        )}
                       </div>
 
                       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between pt-4 border-t border-gray-200 gap-4">
                         <div className="flex items-center gap-2">
-                          <DollarSign className="w-5 h-5 text-green-600" />
                           <div>
                             <p className="text-gray-600 text-sm">Total Price</p>
                             <p className="text-2xl font-bold text-gray-900">₱{booking.totalPrice?.toLocaleString()}</p>
                           </div>
                         </div>
 
-                        <div className="flex gap-2 w-full sm:w-auto">
+                        <div className="flex gap-2 w-full sm:w-auto flex-wrap">
                           {isCompleted && !hasReviewed && (
                             <button
                               onClick={() => setSelectedBookingForReview(booking)}
@@ -340,9 +430,19 @@ const MyBookings = () => {
                             </div>
                           )}
 
+                          {isCancellable && (
+                            <button
+                              onClick={() => setSelectedBookingForCancel(booking)}
+                              className="flex items-center gap-2 bg-red-600 hover:bg-red-700 text-white font-semibold px-4 py-2 rounded-lg transition-colors whitespace-nowrap"
+                            >
+                              <XCircle className="w-4 h-4" />
+                              Cancel
+                            </button>
+                          )}
+
                           <button
                             onClick={() => handleMessageHost(booking)}
-                            disabled={messagingLoading || booking.status === 'cancelled'}
+                            disabled={messagingLoading}
                             className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-400 text-white font-semibold px-4 py-2 rounded-lg transition-colors whitespace-nowrap"
                           >
                             <MessageSquare className="w-4 h-4" />
@@ -359,12 +459,19 @@ const MyBookings = () => {
         )}
       </div>
 
-      {/* Review Modal */}
       {selectedBookingForReview && (
         <ReviewModal
           booking={selectedBookingForReview}
           onClose={() => setSelectedBookingForReview(null)}
           onSuccess={handleReviewSuccess}
+        />
+      )}
+
+      {selectedBookingForCancel && (
+        <CancellationModal
+          booking={selectedBookingForCancel}
+          onClose={() => setSelectedBookingForCancel(null)}
+          onConfirm={handleCancelBooking}
         />
       )}
     </div>

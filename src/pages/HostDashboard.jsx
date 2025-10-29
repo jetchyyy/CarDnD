@@ -1,34 +1,28 @@
+// pages/HostDashboard.jsx
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { useAuth } from '../context/Authcontext'; // Import useAuth
-import {
-  Car,
-  DollarSign,
-  Calendar,
-  TrendingUp,
-  Edit,
-  Trash2,
-  Eye,
-  Plus,
-  X,
-  Bike,
-  Check,
-  XCircle,
-  MessageSquare,
-  Lock
-} from 'lucide-react';
-import AddCar from './AddCar';
-import AddMotorcycle from './AddMotorcycle';
-import BookingCalendar from '../components/BookingCalendar';
+import { useAuth } from '../context/Authcontext';
+import { DollarSign, Calendar, Car, TrendingUp } from 'lucide-react';
 import { db } from '../firebase/firebase';
 import { collection, query, where, getDocs, deleteDoc, doc, updateDoc } from 'firebase/firestore';
 import { deleteVehicleImages } from '../utils/vehicleService';
 import { getHostBookings } from '../utils/bookingService';
 import { createOrGetChat } from '../utils/chatService';
 
+// Import components
+import StatsCard from "../pages/hostdashboard/StatsCard";
+import VerificationAlert from '../pages/hostdashboard/VerificationAlert';
+import DashboardHeader from '../pages/hostdashboard/DashboardHeader';
+import DashboardTabs from '../pages/hostdashboard/DashboardTab';
+import OverviewTab from '../pages/hostdashboard/OverviewTab';
+import VehiclesTab from '../pages/hostdashboard/VehiclesTab';
+import BookingsTab from '../pages/hostdashboard/BookingsTab';
+import CalendarTab from '../pages/hostdashboard/CalendarTab';
+import AddVehicleModal from '../pages/hostdashboard/AddVehicleModal';
+
 const HostDashboard = () => {
   const navigate = useNavigate();
-  const { user, loading: authLoading } = useAuth(); // Get user and loading from context
+  const { user, loading: authLoading } = useAuth();
   const [activeTab, setActiveTab] = useState('overview');
   const [showAddVehicle, setShowAddVehicle] = useState(false);
   const [addType, setAddType] = useState('car');
@@ -39,25 +33,18 @@ const HostDashboard = () => {
   const [messagingLoading, setMessagingLoading] = useState(false);
   const [showVerificationAlert, setShowVerificationAlert] = useState(false);
 
-
   const canAddVehicle = user?.idVerificationStatus === 'approved';
   const isPending = user?.idVerificationStatus === 'pending';
   const needsVerification = !user?.idVerificationStatus || user?.idVerificationStatus === 'idle' || user?.idVerificationStatus === 'rejected';
 
-  
-
-  // Fetch vehicles from Firestore - only when auth is ready and user exists
+  // Fetch vehicles from Firestore
   useEffect(() => {
     const fetchVehicles = async () => {
-      // Wait for auth to be ready
-      if (authLoading) {
-        return;
-      }
+      if (authLoading) return;
 
-      // Check if user exists
       if (!user) {
         setLoading(false);
-        navigate('/login'); // Redirect to login if not authenticated
+        navigate('/login');
         return;
       }
 
@@ -78,17 +65,13 @@ const HostDashboard = () => {
     };
 
     fetchVehicles();
-  }, [user, authLoading, showAddVehicle, navigate]); // Added dependencies
+  }, [user, authLoading, showAddVehicle, navigate]);
 
-  // Fetch bookings from Firestore - only when auth is ready and user exists
+  // Fetch bookings from Firestore
   useEffect(() => {
     const fetchBookings = async () => {
-      // Wait for auth to be ready
-      if (authLoading) {
-        return;
-      }
+      if (authLoading) return;
 
-      // Check if user exists
       if (!user) {
         setBookingsLoading(false);
         return;
@@ -107,7 +90,7 @@ const HostDashboard = () => {
     };
 
     fetchBookings();
-  }, [user, authLoading]); // Added dependencies
+  }, [user, authLoading]);
 
   // Show loading state while auth is being checked
   if (authLoading) {
@@ -141,20 +124,22 @@ const HostDashboard = () => {
     setShowAddVehicle(true);
   };
 
-  // Calculate stats from real data
+  // Calculate stats using hostEarnings (after service fee deduction)
   const calculateStats = () => {
     const confirmedBookings = bookings.filter(b => b.status === 'confirmed');
     const pendingBookings = bookings.filter(b => b.status === 'pending');
-    const totalEarnings = confirmedBookings.reduce((sum, b) => sum + (b.totalPrice || 0), 0);
+    
+    const totalEarnings = confirmedBookings.reduce((sum, b) => sum + (b.hostEarnings || 0), 0);
     
     const currentMonth = new Date().getMonth();
     const currentYear = new Date().getFullYear();
+    
     const monthlyEarnings = confirmedBookings
       .filter(b => {
         const bookingDate = new Date(b.createdAt);
         return bookingDate.getMonth() === currentMonth && bookingDate.getFullYear() === currentYear;
       })
-      .reduce((sum, b) => sum + (b.totalPrice || 0), 0);
+      .reduce((sum, b) => sum + (b.hostEarnings || 0), 0);
 
     return {
       totalEarnings,
@@ -168,9 +153,9 @@ const HostDashboard = () => {
 
   const stats = [
     {
-      title: 'Total Earnings',
+      title: 'Total Estimated Payout',
       value: `₱${statsData.totalEarnings.toLocaleString()}`,
-      change: '+12.5%',
+      change: 'After fees',
       icon: <DollarSign className="w-6 h-6" />,
       bgColor: 'bg-green-100',
       iconColor: 'text-green-600',
@@ -178,7 +163,7 @@ const HostDashboard = () => {
     {
       title: 'Active Bookings',
       value: statsData.activeBookings.toString(),
-      change: '+3',
+      change: `${statsData.activeBookings} total`,
       icon: <Calendar className="w-6 h-6" />,
       bgColor: 'bg-blue-100',
       iconColor: 'text-blue-600',
@@ -186,7 +171,7 @@ const HostDashboard = () => {
     {
       title: 'Total Vehicles',
       value: statsData.totalVehicles.toString(),
-      change: 'Active',
+      change: 'Listed',
       icon: <Car className="w-6 h-6" />,
       bgColor: 'bg-purple-100',
       iconColor: 'text-purple-600',
@@ -194,7 +179,7 @@ const HostDashboard = () => {
     {
       title: 'This Month',
       value: `₱${statsData.monthlyEarnings.toLocaleString()}`,
-      change: '+8.2%',
+      change: 'Estimated',
       icon: <TrendingUp className="w-6 h-6" />,
       bgColor: 'bg-orange-100',
       iconColor: 'text-orange-600',
@@ -273,498 +258,87 @@ const HostDashboard = () => {
     }
   };
 
-  const recentBookings = bookings.slice(0, 5);
-
   return (
-     <div className="relative min-h-screen bg-gray-50">
+    <div className="relative min-h-screen bg-gray-50">
       {/* Verification Alert Banner */}
-      {showVerificationAlert && (
-        <div className="fixed top-20 left-1/2 transform -translate-x-1/2 z-50 w-full max-w-md px-4">
-          <div className="bg-amber-50 border-l-4 border-amber-500 rounded-lg shadow-lg p-4">
-            <div className="flex items-start">
-              <div className="flex-shrink-0">
-                <Lock className="w-6 h-6 text-amber-600" />
-              </div>
-              <div className="ml-3 flex-1">
-                <h3 className="text-sm font-semibold text-amber-900">
-                  {isPending ? 'ID Verification Pending' : 'ID Verification Required'}
-                </h3>
-                <p className="mt-1 text-sm text-amber-700">
-                  {isPending 
-                    ? 'Your ID is currently being reviewed. You can add vehicles once your verification is approved (usually within 24-48 hours).'
-                    : 'You need to verify your ID before you can list vehicles on our platform.'}
-                </p>
-                {needsVerification && (
-                  <button
-                    onClick={() => {
-                      setShowVerificationAlert(false);
-                      navigate('/profile');
-                    }}
-                    className="mt-2 text-sm font-medium text-amber-800 hover:text-amber-900 underline"
-                  >
-                    Verify ID Now
-                  </button>
-                )}
-              </div>
-              <button
-                onClick={() => setShowVerificationAlert(false)}
-                className="ml-3 flex-shrink-0 text-amber-400 hover:text-amber-600"
-              >
-                <X className="w-5 h-5" />
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+      <VerificationAlert 
+        show={showVerificationAlert}
+        onClose={() => setShowVerificationAlert(false)}
+        isPending={isPending}
+        needsVerification={needsVerification}
+      />
 
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         {/* Header Section */}
-        <div className="flex justify-between items-center mb-8">
-          <div>
-            <h1 className="text-3xl font-bold text-gray-900">Host Dashboard</h1>
-            <p className="text-gray-600 mt-1">Manage your vehicles and bookings</p>
-          </div>
-          
-          <div className="relative">
-            <button
-              onClick={handleAddVehicleClick}
-              disabled={!canAddVehicle}
-              className={`flex items-center space-x-2 font-semibold px-6 py-3 rounded-lg transition-colors ${
-                canAddVehicle
-                  ? 'bg-blue-600 hover:bg-blue-700 text-white'
-                  : 'bg-gray-300 text-gray-500 cursor-not-allowed'
-              }`}
-            >
-              {!canAddVehicle && <Lock className="w-5 h-5" />}
-              <Plus className="w-5 h-5" />
-              <span>Add Vehicle</span>
-            </button>
-            {!canAddVehicle && (
-              <div className="absolute top-full mt-2 right-0 w-64 bg-white rounded-lg shadow-lg p-3 border border-gray-200 z-10">
-                <p className="text-xs text-gray-600">
-                  {isPending 
-                    ? '⏳ Your ID verification is pending. You can add vehicles once approved.'
-                    : '🔒 Please verify your ID to start listing vehicles.'}
-                </p>
-              </div>
-            )}
-          </div>
-        </div>
+        <DashboardHeader 
+          canAddVehicle={canAddVehicle}
+          isPending={isPending}
+          onAddVehicleClick={handleAddVehicleClick}
+        />
 
         {/* Stats Grid */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
           {stats.map((stat, index) => (
-            <div key={index} className="bg-white rounded-xl shadow-md p-6">
-              <div className="flex items-center justify-between mb-4">
-                <div className={`${stat.bgColor} ${stat.iconColor} p-3 rounded-lg`}>
-                  {stat.icon}
-                </div>
-                <span className="text-sm font-medium text-green-600">{stat.change}</span>
-              </div>
-              <h3 className="text-gray-600 text-sm mb-1">{stat.title}</h3>
-              <p className="text-2xl font-bold text-gray-900">{stat.value}</p>
-            </div>
+            <StatsCard key={index} {...stat} />
           ))}
         </div>
-      
 
         {/* Tabs */}
         <div className="bg-white rounded-xl shadow-md mb-8">
-          <div className="border-b border-gray-200">
-            <div className="flex space-x-8 px-6 overflow-x-auto">
-              {['overview', 'vehicles', 'bookings', 'calendar'].map((tab) => (
-                <button
-                  key={tab}
-                  onClick={() => setActiveTab(tab)}
-                  className={`py-4 px-2 border-b-2 font-medium text-sm transition-colors whitespace-nowrap ${
-                    activeTab === tab
-                      ? 'border-blue-600 text-blue-600'
-                      : 'border-transparent text-gray-500 hover:text-gray-700'
-                  }`}
-                >
-                  {tab.charAt(0).toUpperCase() + tab.slice(1)}
-                </button>
-              ))}
-            </div>
-          </div>
+          <DashboardTabs 
+            activeTab={activeTab}
+            setActiveTab={setActiveTab}
+          />
 
           <div className="p-6">
-            {/* Overview */}
             {activeTab === 'overview' && (
-              <div className="space-y-6">
-                <h2 className="text-xl font-bold text-gray-900 mb-4">Recent Activity</h2>
-                {bookingsLoading ? (
-                  <p className="text-gray-500 text-center py-10">Loading bookings...</p>
-                ) : recentBookings.length === 0 ? (
-                  <div className="text-center py-12">
-                    <Calendar className="w-16 h-16 text-gray-400 mx-auto mb-4" />
-                    <p className="text-gray-500 text-lg mb-2">No bookings yet</p>
-                    <p className="text-gray-400 text-sm">Your recent bookings will appear here</p>
-                  </div>
-                ) : (
-                  recentBookings.map((booking) => (
-                    <div
-                      key={booking.id}
-                      className="flex items-center justify-between p-4 bg-gray-50 rounded-lg"
-                    >
-                      <div className="flex items-center space-x-4">
-                        <div className="w-12 h-12 bg-blue-100 rounded-full flex items-center justify-center">
-                          {booking.vehicleDetails?.type === 'motorcycle' ? (
-                            <Bike className="w-6 h-6 text-blue-600" />
-                          ) : (
-                            <Car className="w-6 h-6 text-blue-600" />
-                          )}
-                        </div>
-                        <div>
-                          <p className="font-semibold text-gray-900">
-                            {booking.vehicleDetails?.title || 'Vehicle'}
-                          </p>
-                          <p className="text-sm text-gray-600">
-                            {booking.guestDetails?.name} • {new Date(booking.startDate).toLocaleDateString()} to {new Date(booking.endDate).toLocaleDateString()}
-                          </p>
-                        </div>
-                      </div>
-                      <div className="text-right">
-                        <p className="font-bold text-gray-900">₱{booking.totalPrice?.toLocaleString()}</p>
-                        <span
-                          className={`text-xs px-2 py-1 rounded-full capitalize ${getStatusColor(
-                            booking.status
-                          )}`}
-                        >
-                          {booking.status}
-                        </span>
-                      </div>
-                    </div>
-                  ))
-                )}
-              </div>
+              <OverviewTab 
+                bookings={bookings}
+                loading={bookingsLoading}
+                getStatusColor={getStatusColor}
+              />
             )}
 
-            {/* Vehicles */}
             {activeTab === 'vehicles' && (
-              <div>
-                <h2 className="text-xl font-bold text-gray-900 mb-4">Your Vehicles</h2>
-
-                {loading ? (
-                  <p className="text-gray-500 text-center py-10">Loading vehicles...</p>
-                ) : vehicles.length === 0 ? (
-                  <div className="text-center py-12">
-                    <Car className="w-16 h-16 text-gray-400 mx-auto mb-4" />
-                    <p className="text-gray-500 text-lg mb-2">No vehicles listed yet</p>
-                    <p className="text-gray-400 text-sm mb-6">Start earning by adding your first vehicle</p>
-                    <button
-                      onClick={() => setShowAddVehicle(true)}
-                      className="inline-flex items-center space-x-2 bg-blue-600 hover:bg-blue-700 text-white font-semibold px-6 py-3 rounded-lg transition-colors"
-                    >
-                      <Plus className="w-5 h-5" />
-                      <span>Add Your First Vehicle</span>
-                    </button>
-                  </div>
-                ) : (
-                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                    {vehicles.map((v) => (
-                      <div
-                        key={v.id}
-                        className="bg-white border border-gray-200 rounded-xl overflow-hidden hover:shadow-lg transition-shadow"
-                      >
-                        <div className="relative h-48">
-                          <img
-                            src={v.images?.[0] || 'https://via.placeholder.com/400x300?text=No+Image'}
-                            alt={v.title || `${v.specifications?.brand} ${v.specifications?.model}`}
-                            className="w-full h-full object-cover"
-                          />
-                          <span
-                            className={`absolute top-3 right-3 px-3 py-1 rounded-full text-xs font-semibold ${getStatusColor(
-                              v.status || 'available'
-                            )}`}
-                          >
-                            {v.status === 'available' ? 'Available' : v.status}
-                          </span>
-                          <div className="absolute top-3 left-3 bg-white px-2 py-1 rounded-full">
-                            <span className="text-xs font-semibold text-gray-700 capitalize flex items-center">
-                              {v.type === 'car' ? (
-                                <Car className="w-3 h-3 mr-1" />
-                              ) : (
-                                <Bike className="w-3 h-3 mr-1" />
-                              )}
-                              {v.type}
-                            </span>
-                          </div>
-                        </div>
-                        <div className="p-4">
-                          <h3 className="font-bold text-lg text-gray-900 mb-1">
-                            {v.title || `${v.specifications?.brand} ${v.specifications?.model}`}
-                          </h3>
-                          <p className="text-sm text-gray-500 mb-3">{v.location}</p>
-                          
-                          <div className="grid grid-cols-2 gap-3 mb-4 text-sm">
-                            <div>
-                              <p className="text-gray-600">Price/day</p>
-                              <p className="font-semibold text-gray-900">
-                                ₱{v.pricePerDay}
-                              </p>
-                            </div>
-                            <div>
-                              <p className="text-gray-600">Year</p>
-                              <p className="font-semibold text-gray-900">
-                                {v.specifications?.year}
-                              </p>
-                            </div>
-                            <div>
-                              <p className="text-gray-600">Transmission</p>
-                              <p className="font-semibold text-gray-900 capitalize">
-                                {v.specifications?.transmission}
-                              </p>
-                            </div>
-                            <div>
-                              <p className="text-gray-600">
-                                {v.type === 'car' ? 'Seats' : 'Engine'}
-                              </p>
-                              <p className="font-semibold text-gray-900">
-                                {v.type === 'car' 
-                                  ? v.specifications?.seats 
-                                  : `${v.specifications?.engineSize}cc`}
-                              </p>
-                            </div>
-                          </div>
-
-                          <div className="flex space-x-2">
-                            <button className="flex-1 flex items-center justify-center space-x-1 bg-blue-600 hover:bg-blue-700 text-white px-3 py-2 rounded-lg text-sm font-medium transition-colors">
-                              <Eye className="w-4 h-4" />
-                              <span>View</span>
-                            </button>
-                            <button
-                              className="flex items-center justify-center bg-gray-100 hover:bg-gray-200 text-gray-700 px-3 py-2 rounded-lg transition-colors"
-                            >
-                              <Edit className="w-4 h-4" />
-                            </button>
-                            <button
-                              onClick={() => handleDelete(v.id, v.images)}
-                              className="flex items-center justify-center bg-red-100 hover:bg-red-200 text-red-600 px-3 py-2 rounded-lg transition-colors"
-                            >
-                              <Trash2 className="w-4 h-4" />
-                            </button>
-                          </div>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </div>
+              <VehiclesTab 
+                vehicles={vehicles}
+                loading={loading}
+                canAddVehicle={canAddVehicle}
+                handleAddVehicleClick={handleAddVehicleClick}
+                handleDelete={handleDelete}
+                getStatusColor={getStatusColor}
+              />
             )}
 
-            {/* Bookings Table */}
             {activeTab === 'bookings' && (
-              <div>
-                <div className="flex justify-between items-center mb-4">
-                  <h2 className="text-xl font-bold text-gray-900">All Bookings</h2>
-                  <div className="flex gap-2">
-                    <span className="text-sm text-gray-600">
-                      Total: <span className="font-semibold">{bookings.length}</span>
-                    </span>
-                  </div>
-                </div>
-
-                {bookingsLoading ? (
-                  <p className="text-gray-500 text-center py-10">Loading bookings...</p>
-                ) : bookings.length === 0 ? (
-                  <div className="text-center py-12">
-                    <Calendar className="w-16 h-16 text-gray-400 mx-auto mb-4" />
-                    <p className="text-gray-500 text-lg mb-2">No bookings yet</p>
-                    <p className="text-gray-400 text-sm">Bookings for your vehicles will appear here</p>
-                  </div>
-                ) : (
-                  <div className="overflow-x-auto">
-                    <table className="w-full">
-                      <thead className="bg-gray-50">
-                        <tr>
-                          <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                            Vehicle
-                          </th>
-                          <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                            Guest
-                          </th>
-                          <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                            Dates
-                          </th>
-                          <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                            Status
-                          </th>
-                          <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
-                            Amount
-                          </th>
-                          <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">
-                            Actions
-                          </th>
-                        </tr>
-                      </thead>
-                      <tbody className="bg-white divide-y divide-gray-200">
-                        {bookings.map((booking) => (
-                          <tr key={booking.id} className="hover:bg-gray-50">
-                            <td className="px-6 py-4">
-                              <div className="flex items-center">
-                                <img 
-                                  src={booking.vehicleDetails?.image || 'https://via.placeholder.com/50'}
-                                  alt={booking.vehicleDetails?.title}
-                                  className="w-12 h-12 rounded-lg object-cover mr-3"
-                                />
-                                <div>
-                                  <p className="text-sm font-medium text-gray-900">
-                                    {booking.vehicleDetails?.title || 'Vehicle'}
-                                  </p>
-                                  <p className="text-xs text-gray-500 capitalize">
-                                    {booking.vehicleDetails?.type}
-                                  </p>
-                                </div>
-                              </div>
-                            </td>
-                            <td className="px-6 py-4">
-                              <div>
-                                <p className="text-sm text-gray-900">{booking.guestDetails?.name}</p>
-                                <p className="text-xs text-gray-500">{booking.guestDetails?.email}</p>
-                              </div>
-                            </td>
-                            <td className="px-6 py-4 text-sm text-gray-600">
-                              <div>
-                                <p>{new Date(booking.startDate).toLocaleDateString()}</p>
-                                <p className="text-xs text-gray-500">
-                                  to {new Date(booking.endDate).toLocaleDateString()}
-                                </p>
-                              </div>
-                            </td>
-                            <td className="px-6 py-4">
-                              <span
-                                className={`px-3 py-1 inline-flex text-xs leading-5 font-semibold rounded-full capitalize ${getStatusColor(
-                                  booking.status
-                                )}`}
-                              >
-                                {booking.status}
-                              </span>
-                            </td>
-                            <td className="px-6 py-4 text-right text-sm font-semibold text-gray-900">
-                              ₱{booking.totalPrice?.toLocaleString()}
-                            </td>
-                            <td className="px-6 py-4">
-                              {booking.status === 'pending' && (
-                                <div className="flex justify-center gap-2">
-                                  <button
-                                    onClick={() => handleBookingAction(booking.id, 'confirmed')}
-                                    className="p-2 bg-green-100 hover:bg-green-200 text-green-700 rounded-lg transition-colors"
-                                    title="Confirm booking"
-                                  >
-                                    <Check className="w-4 h-4" />
-                                  </button>
-                                  <button
-                                    onClick={() => handleBookingAction(booking.id, 'cancelled')}
-                                    className="p-2 bg-red-100 hover:bg-red-200 text-red-700 rounded-lg transition-colors"
-                                    title="Cancel booking"
-                                  >
-                                    <XCircle className="w-4 h-4" />
-                                  </button>
-                                </div>
-                              )}
-                              {booking.status === 'confirmed' && (
-                                <div className="flex justify-center gap-2">
-                                  <button
-                                    onClick={() => handleMessageGuest(booking)}
-                                    disabled={messagingLoading}
-                                    className="p-2 bg-blue-100 hover:bg-blue-200 text-blue-700 rounded-lg transition-colors disabled:opacity-50"
-                                    title="Message guest"
-                                  >
-                                    <MessageSquare className="w-4 h-4" />
-                                  </button>
-                                </div>
-                              )}
-                              {booking.status === 'cancelled' && (
-                                <div className="flex justify-center">
-                                  <span className="text-xs text-gray-500">Cancelled</span>
-                                </div>
-                              )}
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                )}
-              </div>
+              <BookingsTab 
+                bookings={bookings}
+                loading={bookingsLoading}
+                messagingLoading={messagingLoading}
+                handleBookingAction={handleBookingAction}
+                handleMessageGuest={handleMessageGuest}
+                getStatusColor={getStatusColor}
+              />
             )}
 
-            {/* Calendar Tab */}
             {activeTab === 'calendar' && (
-              <div>
-                <h2 className="text-xl font-bold text-gray-900 mb-6">Vehicle Booking Calendars</h2>
-                {loading ? (
-                  <p className="text-gray-500 text-center py-10">Loading vehicles...</p>
-                ) : vehicles.length === 0 ? (
-                  <div className="text-center py-12">
-                    <Calendar className="w-16 h-16 text-gray-400 mx-auto mb-4" />
-                    <p className="text-gray-500 text-lg mb-2">No vehicles to display</p>
-                    <p className="text-gray-400 text-sm mb-6">Add a vehicle to see its booking calendar</p>
-                  </div>
-                ) : (
-                  <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                    {vehicles.map((vehicle) => (
-                      <BookingCalendar 
-                        key={vehicle.id} 
-                        vehicle={vehicle} 
-                        bookings={bookings}
-                      />
-                    ))}
-                  </div>
-                )}
-              </div>
+              <CalendarTab 
+                vehicles={vehicles}
+                bookings={bookings}
+                loading={loading}
+              />
             )}
           </div>
         </div>
       </div>
 
       {/* Add Vehicle Modal */}
-      {showAddVehicle && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex justify-center items-start overflow-auto py-10 z-50">
-          <div className="relative bg-white w-full max-w-5xl rounded-xl shadow-lg">
-            <button
-              onClick={() => setShowAddVehicle(false)}
-              className="absolute top-4 right-4 text-gray-600 hover:text-gray-900 z-10"
-            >
-              <X className="w-6 h-6" />
-            </button>
-
-            <div className="flex justify-center space-x-4 border-b p-4">
-              <button
-                className={`flex items-center space-x-2 px-4 py-2 rounded-md ${
-                  addType === 'car'
-                    ? 'bg-blue-600 text-white'
-                    : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-                }`}
-                onClick={() => setAddType('car')}
-              >
-                <Car className="w-5 h-5" />
-                <span>Add Car</span>
-              </button>
-              <button
-                className={`flex items-center space-x-2 px-4 py-2 rounded-md ${
-                  addType === 'motorcycle'
-                    ? 'bg-blue-600 text-white'
-                    : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-                }`}
-                onClick={() => setAddType('motorcycle')}
-              >
-                <Bike className="w-5 h-5" />
-                <span>Add Motorcycle</span>
-              </button>
-            </div>
-
-            <div className="p-6 max-h-[80vh] overflow-y-auto">
-  {addType === 'car' ? (
-    <AddCar onSuccess={() => setShowAddVehicle(false)} />
-  ) : (
-    <AddMotorcycle onSuccess={() => setShowAddVehicle(false)} />
-  )}
-</div>
-          </div>
-        </div>
-      )}
+      <AddVehicleModal 
+        show={showAddVehicle}
+        onClose={() => setShowAddVehicle(false)}
+        addType={addType}
+        setAddType={setAddType}
+      />
     </div>
   );
 };

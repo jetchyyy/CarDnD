@@ -1,6 +1,7 @@
-import { useState } from 'react';
+// src/pages/AddMotorcycle.jsx
+import { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Save, AlertCircle, Loader2 } from 'lucide-react';
+import { Save, AlertCircle, Loader2, MapPin, Search } from 'lucide-react';
 import ImageUploader from '../components/ImageUploader';
 import { auth } from '../firebase/firebase';
 import { addVehicle, formatVehicleData } from '../utils/vehicleService';
@@ -8,6 +9,9 @@ import SuccessModal from '../components/reusables/SuccessModal';
 
 const AddMotorcycle = ({ onSuccess }) => {
   const navigate = useNavigate();
+  const mapRef = useRef(null);
+  const mapInstanceRef = useRef(null);
+  const markerRef = useRef(null);
 
   const [formData, setFormData] = useState({
     name: '',
@@ -20,6 +24,9 @@ const AddMotorcycle = ({ onSuccess }) => {
     plateNumber: '',
     price: '',
     location: '',
+    pickupPoint: '',
+    pickupInstructions: '',
+    pickupCoordinates: null,
     description: '',
     features: {},
   });
@@ -28,6 +35,10 @@ const AddMotorcycle = ({ onSuccess }) => {
   const [errors, setErrors] = useState({});
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [showSuccessModal, setShowSuccessModal] = useState(false);
+  const [mapLoaded, setMapLoaded] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [isSearching, setIsSearching] = useState(false);
+  const [searchResults, setSearchResults] = useState([]);
 
   const featuresList = [
     { key: 'usbCharging', label: 'USB Charging Port' },
@@ -39,6 +50,134 @@ const AddMotorcycle = ({ onSuccess }) => {
     { key: 'rainGear', label: 'Rain Gear Included' },
     { key: 'gpsTracker', label: 'GPS Tracker' },
   ];
+
+  // Load Leaflet CSS and JS
+  useEffect(() => {
+    const link = document.createElement('link');
+    link.rel = 'stylesheet';
+    link.href = 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.css';
+    link.integrity = 'sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=';
+    link.crossOrigin = '';
+    document.head.appendChild(link);
+
+    const script = document.createElement('script');
+    script.src = 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.js';
+    script.integrity = 'sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=';
+    script.crossOrigin = '';
+    script.async = true;
+    script.onload = () => setMapLoaded(true);
+    document.head.appendChild(script);
+
+    return () => {
+      if (mapInstanceRef.current) {
+        mapInstanceRef.current.remove();
+      }
+    };
+  }, []);
+
+  // Initialize Leaflet Map
+  useEffect(() => {
+    if (!mapLoaded || !mapRef.current || mapInstanceRef.current) return;
+
+    const map = window.L.map(mapRef.current).setView([10.3157, 123.8854], 13);
+
+    window.L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+      attribution: '© OpenStreetMap contributors',
+      maxZoom: 19,
+    }).addTo(map);
+
+    mapInstanceRef.current = map;
+
+    map.on('click', (e) => {
+      updateMarkerPosition(e.latlng.lat, e.latlng.lng);
+      reverseGeocode(e.latlng.lat, e.latlng.lng);
+    });
+
+  }, [mapLoaded]);
+
+  const updateMarkerPosition = (lat, lng) => {
+    if (!mapInstanceRef.current) return;
+
+    if (markerRef.current) {
+      mapInstanceRef.current.removeLayer(markerRef.current);
+    }
+
+    const marker = window.L.marker([lat, lng], {
+      draggable: true
+    }).addTo(mapInstanceRef.current);
+
+    markerRef.current = marker;
+
+    setFormData(prev => ({
+      ...prev,
+      pickupCoordinates: { lat, lng }
+    }));
+
+    marker.on('dragend', (e) => {
+      const position = e.target.getLatLng();
+      setFormData(prev => ({
+        ...prev,
+        pickupCoordinates: { lat: position.lat, lng: position.lng }
+      }));
+      reverseGeocode(position.lat, position.lng);
+    });
+  };
+
+  const reverseGeocode = async (lat, lng) => {
+    try {
+      const response = await fetch(
+        `https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lng}`
+      );
+      const data = await response.json();
+      if (data.display_name) {
+        setFormData(prev => ({
+          ...prev,
+          pickupPoint: data.display_name
+        }));
+        setSearchQuery(data.display_name);
+      }
+    } catch (error) {
+      console.error('Reverse geocoding error:', error);
+    }
+  };
+
+  
+  const handleSearch = async () => {
+    if (!searchQuery.trim()) return;
+
+    setIsSearching(true);
+    try {
+      const response = await fetch(
+        `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(searchQuery)}&limit=1`
+      );
+      const data = await response.json();
+
+      if (data && data.length > 0) {
+        const { lat, lon, display_name } = data[0];
+        const latitude = parseFloat(lat);
+        const longitude = parseFloat(lon);
+
+        if (mapInstanceRef.current) {
+          mapInstanceRef.current.setView([latitude, longitude], 17);
+        }
+
+        updateMarkerPosition(latitude, longitude);
+
+        setFormData(prev => ({
+          ...prev,
+          pickupPoint: display_name,
+          pickupCoordinates: { lat: latitude, lng: longitude }
+        }));
+      } else {
+        setErrors(prev => ({ ...prev, pickupPoint: 'Location not found. Please try a different search.' }));
+      }
+    } catch (error) {
+      console.error('Search error:', error);
+      setErrors(prev => ({ ...prev, pickupPoint: 'Error searching location. Please try again.' }));
+    } finally {
+      setIsSearching(false);
+    }
+  };
 
   const handleInputChange = (e) => {
     const { name, value } = e.target;
@@ -69,6 +208,8 @@ const AddMotorcycle = ({ onSuccess }) => {
     if (!formData.plateNumber) newErrors.plateNumber = 'Plate number is required';
     if (!formData.price) newErrors.price = 'Price is required';
     if (!formData.location) newErrors.location = 'Location is required';
+    if (!formData.pickupPoint) newErrors.pickupPoint = 'Pickup point is required';
+    if (!formData.pickupCoordinates) newErrors.pickupPoint = 'Please select a location on the map';
     if (!formData.description) newErrors.description = 'Description is required';
     if (images.length === 0) newErrors.images = 'At least one image is required';
 
@@ -93,19 +234,15 @@ const AddMotorcycle = ({ onSuccess }) => {
       const vehicleId = await addVehicle(vehicleData, images, currentUser.uid);
       console.log('Vehicle added successfully with ID:', vehicleId);
       
-      // Show success message
       setShowSuccessModal(true);
 
-      // Wait 2 seconds for user to see success message
       setTimeout(() => {
         setShowSuccessModal(false);
         
-        // Close the parent modal if callback provided
         if (onSuccess) {
           onSuccess();
         }
         
-        // Navigate to host dashboard
         navigate('/host/dashboard');
       }, 2000);
       
@@ -131,7 +268,6 @@ const AddMotorcycle = ({ onSuccess }) => {
           </p>
 
           <div className="bg-white rounded-xl shadow-md p-8">
-            {/* Error Message */}
             {errors.submit && (
               <div className="mb-6 p-4 bg-red-50 border border-red-200 rounded-lg flex items-start">
                 <AlertCircle className="w-5 h-5 text-red-600 mr-2 flex-shrink-0 mt-0.5" />
@@ -146,11 +282,8 @@ const AddMotorcycle = ({ onSuccess }) => {
                   Basic Information
                 </h2>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                  {/* Brand */}
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                      Brand *
-                    </label>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">Brand *</label>
                     <input
                       type="text"
                       name="brand"
@@ -158,9 +291,7 @@ const AddMotorcycle = ({ onSuccess }) => {
                       onChange={handleInputChange}
                       placeholder="e.g., Yamaha"
                       disabled={isSubmitting}
-                      className={`w-full px-4 py-2.5 border ${
-                        errors.brand ? 'border-red-500' : 'border-gray-300'
-                      } rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-gray-900 disabled:bg-gray-100`}
+                      className={`w-full px-4 py-2.5 border ${errors.brand ? 'border-red-500' : 'border-gray-300'} rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-gray-900 disabled:bg-gray-100`}
                     />
                     {errors.brand && (
                       <div className="flex items-center mt-2 text-red-600 text-sm">
@@ -170,11 +301,8 @@ const AddMotorcycle = ({ onSuccess }) => {
                     )}
                   </div>
 
-                  {/* Model */}
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                      Model *
-                    </label>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">Model *</label>
                     <input
                       type="text"
                       name="model"
@@ -182,9 +310,7 @@ const AddMotorcycle = ({ onSuccess }) => {
                       onChange={handleInputChange}
                       placeholder="e.g., NMAX"
                       disabled={isSubmitting}
-                      className={`w-full px-4 py-2.5 border ${
-                        errors.model ? 'border-red-500' : 'border-gray-300'
-                      } rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-gray-900 disabled:bg-gray-100`}
+                      className={`w-full px-4 py-2.5 border ${errors.model ? 'border-red-500' : 'border-gray-300'} rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-gray-900 disabled:bg-gray-100`}
                     />
                     {errors.model && (
                       <div className="flex items-center mt-2 text-red-600 text-sm">
@@ -194,11 +320,8 @@ const AddMotorcycle = ({ onSuccess }) => {
                     )}
                   </div>
 
-                  {/* Year */}
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                      Year *
-                    </label>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">Year *</label>
                     <input
                       type="number"
                       name="year"
@@ -208,9 +331,7 @@ const AddMotorcycle = ({ onSuccess }) => {
                       min="1990"
                       max="2025"
                       disabled={isSubmitting}
-                      className={`w-full px-4 py-2.5 border ${
-                        errors.year ? 'border-red-500' : 'border-gray-300'
-                      } rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-gray-900 disabled:bg-gray-100`}
+                      className={`w-full px-4 py-2.5 border ${errors.year ? 'border-red-500' : 'border-gray-300'} rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-gray-900 disabled:bg-gray-100`}
                     />
                     {errors.year && (
                       <div className="flex items-center mt-2 text-red-600 text-sm">
@@ -220,11 +341,8 @@ const AddMotorcycle = ({ onSuccess }) => {
                     )}
                   </div>
 
-                  {/* Engine Size */}
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                      Engine Size (cc) *
-                    </label>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">Engine Size (cc) *</label>
                     <input
                       type="number"
                       name="engineSize"
@@ -234,9 +352,7 @@ const AddMotorcycle = ({ onSuccess }) => {
                       min="50"
                       max="2000"
                       disabled={isSubmitting}
-                      className={`w-full px-4 py-2.5 border ${
-                        errors.engineSize ? 'border-red-500' : 'border-gray-300'
-                      } rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-gray-900 disabled:bg-gray-100`}
+                      className={`w-full px-4 py-2.5 border ${errors.engineSize ? 'border-red-500' : 'border-gray-300'} rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-gray-900 disabled:bg-gray-100`}
                     />
                     {errors.engineSize && (
                       <div className="flex items-center mt-2 text-red-600 text-sm">
@@ -246,11 +362,8 @@ const AddMotorcycle = ({ onSuccess }) => {
                     )}
                   </div>
 
-                  {/* Plate Number */}
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                      Plate Number *
-                    </label>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">Plate Number *</label>
                     <input
                       type="text"
                       name="plateNumber"
@@ -258,9 +371,7 @@ const AddMotorcycle = ({ onSuccess }) => {
                       onChange={handleInputChange}
                       placeholder="ABC 1234"
                       disabled={isSubmitting}
-                      className={`w-full px-4 py-2.5 border ${
-                        errors.plateNumber ? 'border-red-500' : 'border-gray-300'
-                      } rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-gray-900 uppercase disabled:bg-gray-100`}
+                      className={`w-full px-4 py-2.5 border ${errors.plateNumber ? 'border-red-500' : 'border-gray-300'} rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-gray-900 uppercase disabled:bg-gray-100`}
                     />
                     {errors.plateNumber && (
                       <div className="flex items-center mt-2 text-red-600 text-sm">
@@ -270,11 +381,8 @@ const AddMotorcycle = ({ onSuccess }) => {
                     )}
                   </div>
 
-                  {/* Location */}
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                      Location *
-                    </label>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">Location *</label>
                     <input
                       type="text"
                       name="location"
@@ -282,9 +390,7 @@ const AddMotorcycle = ({ onSuccess }) => {
                       onChange={handleInputChange}
                       placeholder="Cebu City"
                       disabled={isSubmitting}
-                      className={`w-full px-4 py-2.5 border ${
-                        errors.location ? 'border-red-500' : 'border-gray-300'
-                      } rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-gray-900 disabled:bg-gray-100`}
+                      className={`w-full px-4 py-2.5 border ${errors.location ? 'border-red-500' : 'border-gray-300'} rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-gray-900 disabled:bg-gray-100`}
                     />
                     {errors.location && (
                       <div className="flex items-center mt-2 text-red-600 text-sm">
@@ -296,17 +402,115 @@ const AddMotorcycle = ({ onSuccess }) => {
                 </div>
               </div>
 
-              {/* Specifications */}
+              {/* Pickup Point Section with OpenStreetMap */}
               <div className="mb-8">
-                <h2 className="text-xl font-bold text-gray-900 mb-6">
-                  Specifications
+                <h2 className="text-xl font-bold text-gray-900 mb-6 flex items-center">
+                  <MapPin className="w-5 h-5 mr-2 text-blue-600" />
+                  Pickup Point
                 </h2>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                  {/* Motorcycle Type */}
+                <div className="space-y-6">
+                  {/* Search Box */}
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-2">
-                      Motorcycle Type
+                      Search Location
                     </label>
+                    <div className="flex gap-2">
+                      <input
+                        type="text"
+                        value={searchQuery}
+                        onChange={(e) => setSearchQuery(e.target.value)}
+                        onKeyPress={(e) => e.key === 'Enter' && (e.preventDefault(), handleSearch())}
+                        placeholder="Search for a location..."
+                        disabled={isSubmitting}
+                        className="flex-1 px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-gray-900 disabled:bg-gray-100"
+                      />
+                      <button
+                        type="button"
+                        onClick={handleSearch}
+                        disabled={isSearching || isSubmitting}
+                        className="px-6 py-2.5 bg-blue-600 hover:bg-blue-700 disabled:bg-blue-400 text-white rounded-lg transition-colors flex items-center gap-2"
+                      >
+                        {isSearching ? (
+                          <Loader2 className="w-5 h-5 animate-spin" />
+                        ) : (
+                          <Search className="w-5 h-5" />
+                        )}
+                        Search
+                      </button>
+                    </div>
+                    <p className="mt-2 text-sm text-gray-500">
+                      Search for your location or click on the map to set the pickup point
+                    </p>
+                  </div>
+
+                  {/* Pickup Address Display */}
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      Pickup Address *
+                    </label>
+                    <input
+                      type="text"
+                      name="pickupPoint"
+                      value={formData.pickupPoint}
+                      onChange={handleInputChange}
+                      placeholder="Address will appear here after selecting location on map"
+                      disabled={isSubmitting}
+                      className={`w-full px-4 py-2.5 border ${errors.pickupPoint ? 'border-red-500' : 'border-gray-300'} rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-gray-900 disabled:bg-gray-100`}
+                    />
+                    {errors.pickupPoint && (
+                      <div className="flex items-center mt-2 text-red-600 text-sm">
+                        <AlertCircle className="w-4 h-4 mr-1" />
+                        {errors.pickupPoint}
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Map */}
+                  <div className="relative">
+                    <div 
+                      ref={mapRef}
+                      className="w-full h-96 rounded-lg border-2 border-gray-300 overflow-hidden"
+                    >
+                      {!mapLoaded && (
+                        <div className="flex items-center justify-center h-full bg-gray-100">
+                          <Loader2 className="w-8 h-8 text-blue-600 animate-spin" />
+                          <span className="ml-2 text-gray-600">Loading map...</span>
+                        </div>
+                      )}
+                    </div>
+                    {formData.pickupCoordinates && (
+                      <div className="mt-2 text-sm text-gray-600">
+                        Coordinates: {formData.pickupCoordinates.lat.toFixed(6)}, {formData.pickupCoordinates.lng.toFixed(6)}
+                      </div>
+                    )}
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      Pickup Instructions (Optional)
+                    </label>
+                    <textarea
+                      name="pickupInstructions"
+                      value={formData.pickupInstructions}
+                      onChange={handleInputChange}
+                      rows="3"
+                      placeholder="e.g., Meet at the main entrance. Call me 10 minutes before arrival. Helmet and rain gear will be provided."
+                      disabled={isSubmitting}
+                      className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-gray-900 disabled:bg-gray-100"
+                    />
+                    <p className="mt-2 text-sm text-gray-500">
+                      Add helpful details like landmarks, parking instructions, or how to contact you upon arrival
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              {/* Specifications */}
+              <div className="mb-8">
+                <h2 className="text-xl font-bold text-gray-900 mb-6">Specifications</h2>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">Motorcycle Type</label>
                     <select
                       name="type"
                       value={formData.type}
@@ -323,11 +527,8 @@ const AddMotorcycle = ({ onSuccess }) => {
                     </select>
                   </div>
 
-                  {/* Transmission */}
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                      Transmission
-                    </label>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">Transmission</label>
                     <select
                       name="transmission"
                       value={formData.transmission}
@@ -344,15 +545,10 @@ const AddMotorcycle = ({ onSuccess }) => {
 
               {/* Features */}
               <div className="mb-8">
-                <h2 className="text-xl font-bold text-gray-900 mb-6">
-                  Features
-                </h2>
+                <h2 className="text-xl font-bold text-gray-900 mb-6">Features</h2>
                 <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
                   {featuresList.map((feature) => (
-                    <label
-                      key={feature.key}
-                      className="flex items-center space-x-2 cursor-pointer"
-                    >
+                    <label key={feature.key} className="flex items-center space-x-2 cursor-pointer">
                       <input
                         type="checkbox"
                         checked={formData.features[feature.key] || false}
@@ -368,9 +564,7 @@ const AddMotorcycle = ({ onSuccess }) => {
 
               {/* Description & Pricing */}
               <div className="mb-8">
-                <h2 className="text-xl font-bold text-gray-900 mb-6">
-                  Description & Pricing
-                </h2>
+                <h2 className="text-xl font-bold text-gray-900 mb-6">Description & Pricing</h2>
                 <div className="space-y-6">
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-2">
@@ -383,11 +577,7 @@ const AddMotorcycle = ({ onSuccess }) => {
                       rows="4"
                       placeholder="Describe your motorcycle, its condition, and any special features. Also, include your requirements that renters must bring to rent your motorcycle (e.g., valid driver's license, two valid IDs, and a security deposit)."
                       disabled={isSubmitting}
-                      className={`w-full px-4 py-2.5 border ${
-                        errors.description
-                          ? 'border-red-500'
-                          : 'border-gray-300'
-                      } rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-gray-900 disabled:bg-gray-100`}
+                      className={`w-full px-4 py-2.5 border ${errors.description ? 'border-red-500' : 'border-gray-300'} rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-gray-900 disabled:bg-gray-100`}
                     />
                     {errors.description && (
                       <div className="flex items-center mt-2 text-red-600 text-sm">
@@ -398,9 +588,7 @@ const AddMotorcycle = ({ onSuccess }) => {
                   </div>
 
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                      Daily Rate (₱) *
-                    </label>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">Daily Rate (₱) *</label>
                     <input
                       type="number"
                       name="price"
@@ -409,9 +597,7 @@ const AddMotorcycle = ({ onSuccess }) => {
                       placeholder="500"
                       min="0"
                       disabled={isSubmitting}
-                      className={`w-full px-4 py-2.5 border ${
-                        errors.price ? 'border-red-500' : 'border-gray-300'
-                      } rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-gray-900 disabled:bg-gray-100`}
+                      className={`w-full px-4 py-2.5 border ${errors.price ? 'border-red-500' : 'border-gray-300'} rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-gray-900 disabled:bg-gray-100`}
                     />
                     {errors.price && (
                       <div className="flex items-center mt-2 text-red-600 text-sm">
@@ -425,9 +611,7 @@ const AddMotorcycle = ({ onSuccess }) => {
 
               {/* Images */}
               <div className="mb-8">
-                <h2 className="text-xl font-bold text-gray-900 mb-6">
-                  Photos *
-                </h2>
+                <h2 className="text-xl font-bold text-gray-900 mb-6">Photos *</h2>
                 <ImageUploader
                   onImagesChange={handleImagesChange}
                   maxImages={5}

@@ -1,7 +1,7 @@
-// src/pages/AddCar.jsx
-import { useState } from 'react';
+// Complete AddCar.jsx with live search as user types
+import { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Save, AlertCircle, Loader2 } from 'lucide-react';
+import { Save, AlertCircle, Loader2, MapPin, Search } from 'lucide-react';
 import ImageUploader from '../components/ImageUploader';
 import { auth } from '../firebase/firebase';
 import { addVehicle, formatVehicleData } from '../utils/vehicleService';
@@ -9,6 +9,11 @@ import SuccessModal from '../components/reusables/SuccessModal';
 
 const AddCar = ({ onSuccess }) => {
   const navigate = useNavigate();
+  const mapRef = useRef(null);
+  const mapInstanceRef = useRef(null);
+  const markerRef = useRef(null);
+  const searchTimeoutRef = useRef(null);
+  
   const [formData, setFormData] = useState({
     name: '',
     brand: '',
@@ -21,6 +26,9 @@ const AddCar = ({ onSuccess }) => {
     plateNumber: '',
     price: '',
     location: '',
+    pickupPoint: '',
+    pickupInstructions: '',
+    pickupCoordinates: null,
     description: '',
     features: {}
   });
@@ -29,6 +37,11 @@ const AddCar = ({ onSuccess }) => {
   const [errors, setErrors] = useState({});
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [showSuccessModal, setShowSuccessModal] = useState(false);
+  const [mapLoaded, setMapLoaded] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [isSearching, setIsSearching] = useState(false);
+  const [searchResults, setSearchResults] = useState([]);
+  const [showDropdown, setShowDropdown] = useState(false);
 
   const featuresList = [
     { key: 'ac', label: 'Air Conditioning' },
@@ -42,6 +55,180 @@ const AddCar = ({ onSuccess }) => {
     { key: 'parkingSensors', label: 'Parking Sensors' },
     { key: 'keylessEntry', label: 'Keyless Entry' }
   ];
+
+  // Load Leaflet CSS and JS
+  useEffect(() => {
+    const link = document.createElement('link');
+    link.rel = 'stylesheet';
+    link.href = 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.css';
+    link.integrity = 'sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=';
+    link.crossOrigin = '';
+    document.head.appendChild(link);
+
+    const script = document.createElement('script');
+    script.src = 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.js';
+    script.integrity = 'sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=';
+    script.crossOrigin = '';
+    script.async = true;
+    script.onload = () => setMapLoaded(true);
+    document.head.appendChild(script);
+
+    return () => {
+      if (mapInstanceRef.current) {
+        mapInstanceRef.current.remove();
+      }
+      if (searchTimeoutRef.current) {
+        clearTimeout(searchTimeoutRef.current);
+      }
+    };
+  }, []);
+
+  // Initialize Leaflet Map
+  useEffect(() => {
+    if (!mapLoaded || !mapRef.current || mapInstanceRef.current) return;
+
+    const map = window.L.map(mapRef.current).setView([10.3157, 123.8854], 13);
+
+    window.L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+      attribution: '© OpenStreetMap contributors',
+      maxZoom: 19,
+    }).addTo(map);
+
+    mapInstanceRef.current = map;
+
+    map.on('click', (e) => {
+      updateMarkerPosition(e.latlng.lat, e.latlng.lng);
+      reverseGeocode(e.latlng.lat, e.latlng.lng);
+    });
+
+  }, [mapLoaded]);
+
+  const updateMarkerPosition = (lat, lng) => {
+    if (!mapInstanceRef.current) return;
+
+    if (markerRef.current) {
+      mapInstanceRef.current.removeLayer(markerRef.current);
+    }
+
+    const marker = window.L.marker([lat, lng], {
+      draggable: true
+    }).addTo(mapInstanceRef.current);
+
+    markerRef.current = marker;
+
+    setFormData(prev => ({
+      ...prev,
+      pickupCoordinates: { lat, lng }
+    }));
+
+    marker.on('dragend', (e) => {
+      const position = e.target.getLatLng();
+      setFormData(prev => ({
+        ...prev,
+        pickupCoordinates: { lat: position.lat, lng: position.lng }
+      }));
+      reverseGeocode(position.lat, position.lng);
+    });
+  };
+
+  const reverseGeocode = async (lat, lng) => {
+    try {
+      const response = await fetch(
+        `https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lng}`
+      );
+      const data = await response.json();
+      if (data.display_name) {
+        setFormData(prev => ({
+          ...prev,
+          pickupPoint: data.display_name
+        }));
+        setSearchQuery(data.display_name);
+      }
+    } catch (error) {
+      console.error('Reverse geocoding error:', error);
+    }
+  };
+
+  // Live search as user types
+  const handleSearchQueryChange = (e) => {
+    const value = e.target.value;
+    setSearchQuery(value);
+
+    // Clear previous timeout
+    if (searchTimeoutRef.current) {
+      clearTimeout(searchTimeoutRef.current);
+    }
+
+    // Clear errors
+    if (errors.pickupPoint) {
+      setErrors(prev => ({ ...prev, pickupPoint: '' }));
+    }
+
+    // If query is empty, hide dropdown
+    if (!value.trim()) {
+      setShowDropdown(false);
+      setSearchResults([]);
+      return;
+    }
+
+    // Set new timeout for search (500ms delay)
+    searchTimeoutRef.current = setTimeout(() => {
+      performSearch(value);
+    }, 500);
+  };
+
+  const performSearch = async (query) => {
+    if (!query.trim()) return;
+
+    setIsSearching(true);
+    
+    try {
+      const response = await fetch(
+        `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(query)}&limit=5`
+      );
+      const data = await response.json();
+
+      if (data && data.length > 0) {
+        setSearchResults(data);
+        setShowDropdown(true);
+      } else {
+        setSearchResults([]);
+        setShowDropdown(false);
+      }
+    } catch (error) {
+      console.error('Search error:', error);
+      setSearchResults([]);
+      setShowDropdown(false);
+    } finally {
+      setIsSearching(false);
+    }
+  };
+
+  const handleSelectLocation = (result) => {
+    const { lat, lon, display_name } = result;
+    const latitude = parseFloat(lat);
+    const longitude = parseFloat(lon);
+
+    if (mapInstanceRef.current) {
+      mapInstanceRef.current.setView([latitude, longitude], 17);
+    }
+
+    updateMarkerPosition(latitude, longitude);
+
+    setFormData(prev => ({
+      ...prev,
+      pickupPoint: display_name,
+      pickupCoordinates: { lat: latitude, lng: longitude }
+    }));
+
+    setSearchQuery(display_name);
+    setShowDropdown(false);
+    setSearchResults([]);
+    
+    if (errors.pickupPoint) {
+      setErrors(prev => ({ ...prev, pickupPoint: '' }));
+    }
+  };
 
   const handleInputChange = (e) => {
     const { name, value } = e.target;
@@ -74,6 +261,8 @@ const AddCar = ({ onSuccess }) => {
     if (!formData.plateNumber) newErrors.plateNumber = 'Plate number is required';
     if (!formData.price) newErrors.price = 'Price is required';
     if (!formData.location) newErrors.location = 'Location is required';
+    if (!formData.pickupPoint) newErrors.pickupPoint = 'Pickup point is required';
+    if (!formData.pickupCoordinates) newErrors.pickupPoint = 'Please select a location on the map';
     if (!formData.description) newErrors.description = 'Description is required';
     if (images.length === 0) newErrors.images = 'At least one image is required';
 
@@ -88,7 +277,6 @@ const AddCar = ({ onSuccess }) => {
       return;
     }
 
-    // Check if user is authenticated
     const currentUser = auth.currentUser;
     if (!currentUser) {
       setErrors({ submit: 'You must be logged in to add a vehicle' });
@@ -98,27 +286,20 @@ const AddCar = ({ onSuccess }) => {
     setIsSubmitting(true);
 
     try {
-      // Format the vehicle data
       const vehicleData = formatVehicleData(formData, 'car');
-      
-      // Add vehicle to Firebase
       const vehicleId = await addVehicle(vehicleData, images, currentUser.uid);
       
       console.log('Vehicle added successfully with ID:', vehicleId);
       
-      // Show success message
       setShowSuccessModal(true);
 
-      // Wait 2 seconds for user to see success message
       setTimeout(() => {
         setShowSuccessModal(false);
         
-        // Close the parent modal if callback provided
         if (onSuccess) {
           onSuccess();
         }
         
-        // Navigate to host dashboard
         navigate('/host/dashboard');
       }, 2000);
       
@@ -133,14 +314,12 @@ const AddCar = ({ onSuccess }) => {
   return (
     <div className="min-h-screen bg-gray-50 py-12">
       <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8">
-        {/* Header */}
         <div className="mb-8">
           <h1 className="text-3xl font-bold text-gray-900 mb-2">List Your Car</h1>
           <p className="text-gray-600">Share your car and start earning money today</p>
         </div>
 
         <div className="bg-white rounded-xl shadow-md p-8">
-          {/* Error Message */}
           {errors.submit && (
             <div className="mb-6 p-4 bg-red-50 border border-red-200 rounded-lg flex items-start">
               <AlertCircle className="w-5 h-5 text-red-600 mr-2 flex-shrink-0 mt-0.5" />
@@ -154,9 +333,7 @@ const AddCar = ({ onSuccess }) => {
               <h2 className="text-xl font-bold text-gray-900 mb-6">Basic Information</h2>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Brand *
-                  </label>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Brand *</label>
                   <input
                     type="text"
                     name="brand"
@@ -175,9 +352,7 @@ const AddCar = ({ onSuccess }) => {
                 </div>
 
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Model *
-                  </label>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Model *</label>
                   <input
                     type="text"
                     name="model"
@@ -196,9 +371,7 @@ const AddCar = ({ onSuccess }) => {
                 </div>
 
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Year *
-                  </label>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Year *</label>
                   <input
                     type="number"
                     name="year"
@@ -219,9 +392,7 @@ const AddCar = ({ onSuccess }) => {
                 </div>
 
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Plate Number *
-                  </label>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Plate Number *</label>
                   <input
                     type="text"
                     name="plateNumber"
@@ -240,9 +411,7 @@ const AddCar = ({ onSuccess }) => {
                 </div>
 
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Location *
-                  </label>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Location *</label>
                   <input
                     type="text"
                     name="location"
@@ -262,14 +431,137 @@ const AddCar = ({ onSuccess }) => {
               </div>
             </div>
 
+            {/* Pickup Point Section with OpenStreetMap */}
+            <div className="mb-8">
+              <h2 className="text-xl font-bold text-gray-900 mb-6 flex items-center">
+                <MapPin className="w-5 h-5 mr-2 text-blue-600" />
+                Pickup Point
+              </h2>
+              <div className="space-y-6">
+                {/* Search Box with Live Results */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Search Location
+                  </label>
+                  <div className="relative">
+                    <div className="flex gap-2">
+                      <div className="flex-1 relative">
+                        <input
+                          type="text"
+                          value={searchQuery}
+                          onChange={handleSearchQueryChange}
+                          onFocus={() => searchResults.length > 0 && setShowDropdown(true)}
+                          placeholder="Start typing to search for a location..."
+                          disabled={isSubmitting}
+                          className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-gray-900 disabled:bg-gray-100"
+                        />
+                        {isSearching && (
+                          <div className="absolute right-3 top-1/2 transform -translate-y-1/2">
+                            <Loader2 className="w-5 h-5 text-blue-600 animate-spin" />
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                    
+                    {/* Dropdown Results */}
+                    {showDropdown && searchResults.length > 0 && (
+                      <div className="absolute z-50 w-full mt-2 bg-white border border-gray-300 rounded-lg shadow-lg max-h-64 overflow-y-auto">
+                        {searchResults.map((result, index) => (
+                          <button
+                            key={index}
+                            type="button"
+                            onClick={() => handleSelectLocation(result)}
+                            className="w-full px-4 py-3 text-left hover:bg-blue-50 transition-colors border-b border-gray-100 last:border-b-0 focus:bg-blue-50 focus:outline-none"
+                          >
+                            <div className="flex items-start">
+                              <MapPin className="w-4 h-4 text-blue-600 mr-2 mt-1 flex-shrink-0" />
+                              <div className="flex-1">
+                                <p className="text-sm font-medium text-gray-900">
+                                  {result.display_name.split(',').slice(0, 2).join(',')}
+                                </p>
+                                <p className="text-xs text-gray-500 mt-1">
+                                  {result.display_name}
+                                </p>
+                              </div>
+                            </div>
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                  <p className="mt-2 text-sm text-gray-500">
+                    Type to search or click on the map to set the pickup point
+                  </p>
+                </div>
+
+                {/* Pickup Address Display */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Pickup Address *
+                  </label>
+                  <input
+                    type="text"
+                    name="pickupPoint"
+                    value={formData.pickupPoint}
+                    onChange={handleInputChange}
+                    placeholder="Address will appear here after selecting location"
+                    disabled={isSubmitting}
+                    className={`w-full px-4 py-2.5 border ${errors.pickupPoint ? 'border-red-500' : 'border-gray-300'} rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-gray-900 disabled:bg-gray-100`}
+                  />
+                  {errors.pickupPoint && (
+                    <div className="flex items-center mt-2 text-red-600 text-sm">
+                      <AlertCircle className="w-4 h-4 mr-1" />
+                      {errors.pickupPoint}
+                    </div>
+                  )}
+                </div>
+
+                {/* Map */}
+                <div className="relative z-0">
+                  <div 
+                    ref={mapRef}
+                    className="w-full h-96 rounded-lg border-2 border-gray-300 overflow-hidden relative z-0"
+                  >
+                    {!mapLoaded && (
+                      <div className="flex items-center justify-center h-full bg-gray-100">
+                        <Loader2 className="w-8 h-8 text-blue-600 animate-spin" />
+                        <span className="ml-2 text-gray-600">Loading map...</span>
+                      </div>
+                    )}
+                  </div>
+                  {formData.pickupCoordinates && (
+                    <div className="mt-2 text-sm text-gray-600">
+                      Coordinates: {formData.pickupCoordinates.lat.toFixed(6)}, {formData.pickupCoordinates.lng.toFixed(6)}
+                    </div>
+                  )}
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Pickup Instructions (Optional)
+                  </label>
+                  <textarea
+                    name="pickupInstructions"
+                    value={formData.pickupInstructions}
+                    onChange={handleInputChange}
+                    rows="3"
+                    placeholder="e.g., Park at Level 3, Section B. Call me when you arrive and I'll meet you there. Landmark: Near the food court entrance."
+                    disabled={isSubmitting}
+                    className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-gray-900 disabled:bg-gray-100"
+                  />
+                  <p className="mt-2 text-sm text-gray-500">
+                    Add helpful details like landmarks, parking instructions, or how to contact you upon arrival
+                  </p>
+                </div>
+              </div>
+            </div>
+
             {/* Vehicle Specifications */}
             <div className="mb-8">
               <h2 className="text-xl font-bold text-gray-900 mb-6">Specifications</h2>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Body Type
-                  </label>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Body Type</label>
                   <select
                     name="type"
                     value={formData.type}
@@ -287,9 +579,7 @@ const AddCar = ({ onSuccess }) => {
                 </div>
 
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Transmission
-                  </label>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Transmission</label>
                   <select
                     name="transmission"
                     value={formData.transmission}
@@ -303,9 +593,7 @@ const AddCar = ({ onSuccess }) => {
                 </div>
 
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Fuel Type
-                  </label>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Fuel Type</label>
                   <select
                     name="fuelType"
                     value={formData.fuelType}
@@ -321,9 +609,7 @@ const AddCar = ({ onSuccess }) => {
                 </div>
 
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Seating Capacity
-                  </label>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Seating Capacity</label>
                   <select
                     name="seats"
                     value={formData.seats}
@@ -386,9 +672,7 @@ const AddCar = ({ onSuccess }) => {
                 </div>
 
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Daily Rate (₱) *
-                  </label>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Daily Rate (₱) *</label>
                   <input
                     type="number"
                     name="price"
