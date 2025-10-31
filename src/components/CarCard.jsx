@@ -16,7 +16,7 @@ const CarCard = ({ vehicle }) => {
   const id = vehicle.id;
   const title = vehicle.title || `${vehicle.specifications?.brand} ${vehicle.specifications?.model}`;
   const type = vehicle.type || 'motorcycle';
-  const image = vehicle.images?.[0] || 'https://via.placeholder.com/400x300?text=No+Image';
+  const image = vehicle.imageUrls?.[0];
   const price = vehicle.pricePerDay;
   const totalTrips = vehicle.totalTrips || 0;
   const location = vehicle.location;
@@ -226,7 +226,7 @@ const CarCard = ({ vehicle }) => {
       </div>
 
       {/* Add CSS for fade-in animation */}
-      <style jsx>{`
+      <style>{`
         @keyframes fade-in {
           from {
             opacity: 0;

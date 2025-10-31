@@ -148,7 +148,7 @@ const VehicleDetails = () => {
   }
 
   const isCar = vehicle.type === 'car';
-  const images = vehicle.images || [];
+  const images = vehicle.imageUrls || [];
   const specs = vehicle.specifications || {};
   const features = vehicle.features || {};
 

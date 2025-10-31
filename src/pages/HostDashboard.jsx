@@ -22,9 +22,9 @@ import AddMotorcycle from './AddMotorcycle';
 import BookingCalendar from '../components/BookingCalendar';
 import { db } from '../firebase/firebase';
 import { collection, query, where, getDocs, deleteDoc, doc, updateDoc } from 'firebase/firestore';
-import { deleteVehicleImages } from '../utils/vehicleService';
 import { getHostBookings } from '../utils/bookingService';
 import { createOrGetChat } from '../utils/chatService';
+import { deleteVehicle, getHostVehicles } from '../utils/vehicleService';
 
 const HostDashboard = () => {
   const navigate = useNavigate();
@@ -63,15 +63,11 @@ const HostDashboard = () => {
 
       try {
         setLoading(true);
-        const q = query(collection(db, 'vehicles'), where('hostId', '==', user.userId));
-        const snapshot = await getDocs(q);
-        const fetchedVehicles = snapshot.docs.map(doc => ({
-          id: doc.id,
-          ...doc.data(),
-        }));
-        setVehicles(fetchedVehicles);
+        const vehicles = await getHostVehicles(user.userId)
+        setVehicles(vehicles)
       } catch (error) {
         console.error('Error fetching vehicles:', error);
+        setVehicles([]);
       } finally {
         setLoading(false);
       }
@@ -185,7 +181,7 @@ const HostDashboard = () => {
     },
     {
       title: 'Total Vehicles',
-      value: statsData.totalVehicles.toString(),
+      value: statsData?.totalVehicles?.toString() || "0",
       change: 'Active',
       icon: <Car className="w-6 h-6" />,
       bgColor: 'bg-purple-100',
@@ -202,14 +198,11 @@ const HostDashboard = () => {
   ];
 
   // Delete vehicle handler
-  const handleDelete = async (id, imageUrls) => {
+  const handleDelete = async (id,imageUrls) => {
     if (window.confirm('Are you sure you want to delete this vehicle?')) {
       try {
-        if (imageUrls && imageUrls.length > 0) {
-          await deleteVehicleImages(imageUrls);
-        }
-        await deleteDoc(doc(db, 'vehicles', id));
-        setVehicles(prev => prev.filter(v => v.id !== id));
+        await deleteVehicle(id,imageUrls)
+        setVehicles(prev => prev.filter(v => v.id !== v.id));
       } catch (error) {
         console.error('Error deleting vehicle:', error);
         alert('Failed to delete vehicle. Please try again.');
@@ -469,7 +462,7 @@ const HostDashboard = () => {
                       >
                         <div className="relative h-48">
                           <img
-                            src={v.images?.[0] || 'https://via.placeholder.com/400x300?text=No+Image'}
+                            src={v.imageUrls?.[0] || 'https://via.placeholder.com/400x300?text=No+Image'}
                             alt={v.title || `${v.specifications?.brand} ${v.specifications?.model}`}
                             className="w-full h-full object-cover"
                           />
@@ -539,7 +532,7 @@ const HostDashboard = () => {
                               <Edit className="w-4 h-4" />
                             </button>
                             <button
-                              onClick={() => handleDelete(v.id, v.images)}
+                              onClick={() => handleDelete(v.id, v.imageUrls)}
                               className="flex items-center justify-center bg-red-100 hover:bg-red-200 text-red-600 px-3 py-2 rounded-lg transition-colors"
                             >
                               <Trash2 className="w-4 h-4" />

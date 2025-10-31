@@ -1,12 +1,19 @@
 // src/utils/bookingService.js
-import { collection, addDoc, doc, getDoc, query, where, getDocs } from 'firebase/firestore';
-import { db, storage } from '../firebase/firebase';
-import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
+import {
+  collection,
+  addDoc,
+  doc,
+  getDoc,
+  query,
+  where,
+  getDocs,
+} from "firebase/firestore";
+import { db, storage, auth } from "../firebase/firebase";
+import { ref, uploadBytes, getDownloadURL } from "firebase/storage";
 
 /**
  * Upload payment proof images to Firebase Storage
  */
-
 
 /**
  * Create a new booking and track service fee
@@ -15,36 +22,54 @@ import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
  */
 
 export const uploadPayment = async (images, paymentId) => {
-  
-  if (!images) throw new Error("No images provided to uploadPayment.");
+  try {
+    const MAX_SIZE = 5 * 1024 * 1024;
+    const allowedTypes = ["image/png", "image/jpeg", "image/jpg"];
 
-  const files = Array.isArray(images) ? images : [images];
-  if (files.length === 0) throw new Error("No images provided to uploadPayment.");
+    const files = Array.isArray(images) ? images : [images];
 
-  const imageUrls = [];
+    const formData = new FormData();
 
-  for (let i = 0; i < files.length; i++) {
-    const file = files[i];
-    const timestamp = Date.now();
-    const extension = file.name.split(".").pop();
-    const fileName = `${paymentId}_${timestamp}_${i}.${extension}`;
+    for (let i = 0; i < files.length; i++) {
+      const file = files[i];
 
-    const storageRef = ref(storage, `booking/${paymentId}/${fileName}`);
-
-    try {
-      await uploadBytes(storageRef, file);
-      const url = await getDownloadURL(storageRef);
-      imageUrls.push(url);
-    } catch (error) {
-      console.error("Error uploading image:", error);
-      throw new Error(`Failed to upload image ${i + 1}`);
+      if (!allowedTypes.includes(file.type)) {
+        alert(`File type not allowed: ${file.name}`);
+        return;
+      }
+      if (file.size > MAX_SIZE) {
+        alert(`File too large: ${file.name}`);
+        return;
+      }
+      formData.append("images", file);
     }
-  }
 
-  return imageUrls;
+    const token = await auth.currentUser.getIdToken();
+
+    const res = await fetch(
+      `http://localhost:3000/upload-payment/${paymentId}`,
+      {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+        body: formData,
+      }
+    );
+
+    const data = await res.json();
+
+    if (res.ok) {
+      // ✅ fixed
+      return data.imageUrls;
+    } else {
+      alert(data.error);
+    }
+  } catch (error) {
+    alert("Something went wrong while uploading. Please try again.");
+  }
 };
 export const createBooking = async (bookingData) => {
-
   try {
     // Calculate service fee (5% of total price)
     const serviceFeePercentage = 0.05;
@@ -59,7 +84,7 @@ export const createBooking = async (bookingData) => {
       endDate: bookingData.endDate,
       totalPrice: bookingData.totalPrice, // Total paid by guest
       hostEarnings: hostEarnings, // Amount owed to host (after service fee)
-      status: 'confirmed',
+      status: "confirmed",
       createdAt: new Date().toISOString(),
       paidOutAt: null, // Initialize as null - will be set when admin processes payout
       vehicleDetails: {
@@ -79,7 +104,7 @@ export const createBooking = async (bookingData) => {
     };
 
     // Create booking document
-    const docRef = await addDoc(collection(db, 'bookings'), booking);
+    const docRef = await addDoc(collection(db, "bookings"), booking);
     const bookingId = docRef.id;
 
     // Create service fee tracking record
@@ -92,23 +117,18 @@ export const createBooking = async (bookingData) => {
       percentage: serviceFeePercentage * 100,
       baseAmount: bookingData.totalPrice,
       hostEarnings: hostEarnings, // Track what host should receive
-      status: 'collected',
+      status: "collected",
       collectedAt: new Date().toISOString(),
       month: new Date().getMonth() + 1,
       year: new Date().getFullYear(),
       vehicleTitle: bookingData.vehicleTitle,
     };
- 
+
     // Add to serviceFees collection
-    await addDoc(collection(db, 'serviceFees'), serviceFeeRecord);
-
-    console.log('Booking created successfully with ID:', bookingId);
-    console.log('Service fee collected:', serviceFeeAmount);
-    console.log('Host will receive:', hostEarnings);
-
+    await addDoc(collection(db, "serviceFees"), serviceFeeRecord);
     return bookingId;
   } catch (error) {
-    console.error('Error creating booking:', error);
+    console.error("Error creating booking:", error);
     throw error;
   }
 };
@@ -120,7 +140,10 @@ export const createBooking = async (bookingData) => {
  */
 export const getGuestBookings = async (guestId) => {
   try {
-    const q = query(collection(db, 'bookings'), where('guestId', '==', guestId));
+    const q = query(
+      collection(db, "bookings"),
+      where("guestId", "==", guestId)
+    );
     const snapshot = await getDocs(q);
 
     const bookings = [];
@@ -133,7 +156,7 @@ export const getGuestBookings = async (guestId) => {
 
     return bookings;
   } catch (error) {
-    console.error('Error fetching guest bookings:', error);
+    console.error("Error fetching guest bookings:", error);
     throw error;
   }
 };
@@ -145,7 +168,7 @@ export const getGuestBookings = async (guestId) => {
  */
 export const getHostBookings = async (hostId) => {
   try {
-    const q = query(collection(db, 'bookings'), where('hostId', '==', hostId));
+    const q = query(collection(db, "bookings"), where("hostId", "==", hostId));
     const snapshot = await getDocs(q);
 
     const bookings = [];
@@ -158,7 +181,7 @@ export const getHostBookings = async (hostId) => {
 
     return bookings;
   } catch (error) {
-    console.error('Error fetching host bookings:', error);
+    console.error("Error fetching host bookings:", error);
     throw error;
   }
 };
@@ -170,7 +193,7 @@ export const getHostBookings = async (hostId) => {
  */
 export const getBookingById = async (bookingId) => {
   try {
-    const docRef = doc(db, 'bookings', bookingId);
+    const docRef = doc(db, "bookings", bookingId);
     const docSnap = await getDoc(docRef);
 
     if (docSnap.exists()) {
@@ -179,10 +202,10 @@ export const getBookingById = async (bookingId) => {
         ...docSnap.data(),
       };
     } else {
-      throw new Error('Booking not found');
+      throw new Error("Booking not found");
     }
   } catch (error) {
-    console.error('Error fetching booking:', error);
+    console.error("Error fetching booking:", error);
     throw error;
   }
 };
@@ -197,9 +220,9 @@ export const getBookingById = async (bookingId) => {
 export const checkAvailability = async (vehicleId, startDate, endDate) => {
   try {
     const q = query(
-      collection(db, 'bookings'),
-      where('carId', '==', vehicleId),
-      where('status', 'in', ['pending', 'confirmed'])
+      collection(db, "bookings"),
+      where("carId", "==", vehicleId),
+      where("status", "in", ["pending", "confirmed"])
     );
 
     const snapshot = await getDocs(q);
@@ -223,7 +246,7 @@ export const checkAvailability = async (vehicleId, startDate, endDate) => {
 
     return true;
   } catch (error) {
-    console.error('Error checking availability:', error);
+    console.error("Error checking availability:", error);
     throw error;
   }
 };
@@ -236,9 +259,9 @@ export const checkAvailability = async (vehicleId, startDate, endDate) => {
 export const getHostUnpaidEarnings = async (hostId) => {
   try {
     const q = query(
-      collection(db, 'bookings'),
-      where('hostId', '==', hostId),
-      where('status', '==', 'confirmed')
+      collection(db, "bookings"),
+      where("hostId", "==", hostId),
+      where("status", "==", "confirmed")
     );
 
     const snapshot = await getDocs(q);
@@ -249,10 +272,10 @@ export const getHostUnpaidEarnings = async (hostId) => {
       const booking = doc.data();
       // Only count if not yet paid out
       if (!booking.paidOutAt) {
-        totalEarnings += (booking.hostEarnings || 0);
+        totalEarnings += booking.hostEarnings || 0;
         unpaidBookings.push({
           id: doc.id,
-          ...booking
+          ...booking,
         });
       }
     });
@@ -260,10 +283,10 @@ export const getHostUnpaidEarnings = async (hostId) => {
     return {
       totalEarnings,
       unpaidBookings,
-      count: unpaidBookings.length
+      count: unpaidBookings.length,
     };
   } catch (error) {
-    console.error('Error fetching host unpaid earnings:', error);
+    console.error("Error fetching host unpaid earnings:", error);
     throw error;
   }
 };
@@ -277,10 +300,10 @@ export const getHostUnpaidEarnings = async (hostId) => {
 export const getTotalServiceFees = async (startDate, endDate) => {
   try {
     const q = query(
-      collection(db, 'serviceFees'),
-      where('collectedAt', '>=', startDate.toISOString()),
-      where('collectedAt', '<=', endDate.toISOString()),
-      where('status', '==', 'collected')
+      collection(db, "serviceFees"),
+      where("collectedAt", ">=", startDate.toISOString()),
+      where("collectedAt", "<=", endDate.toISOString()),
+      where("status", "==", "collected")
     );
 
     const snapshot = await getDocs(q);
@@ -292,7 +315,7 @@ export const getTotalServiceFees = async (startDate, endDate) => {
 
     return total;
   } catch (error) {
-    console.error('Error fetching total service fees:', error);
+    console.error("Error fetching total service fees:", error);
     throw error;
   }
 };
@@ -306,9 +329,9 @@ export const getTotalServiceFees = async (startDate, endDate) => {
 export const getMonthlyServiceFees = async (year, month) => {
   try {
     const q = query(
-      collection(db, 'serviceFees'),
-      where('year', '==', year),
-      where('month', '==', month)
+      collection(db, "serviceFees"),
+      where("year", "==", year),
+      where("month", "==", month)
     );
 
     const snapshot = await getDocs(q);
@@ -323,7 +346,7 @@ export const getMonthlyServiceFees = async (year, month) => {
 
     return fees;
   } catch (error) {
-    console.error('Error fetching monthly service fees:', error);
+    console.error("Error fetching monthly service fees:", error);
     throw error;
   }
 };
@@ -339,7 +362,7 @@ export const getMonthlyServiceFeeTotal = async (year, month) => {
     const fees = await getMonthlyServiceFees(year, month);
     return fees.reduce((sum, fee) => sum + fee.amount, 0);
   } catch (error) {
-    console.error('Error calculating monthly service fee total:', error);
+    console.error("Error calculating monthly service fee total:", error);
     throw error;
   }
 };
@@ -350,7 +373,7 @@ export const getMonthlyServiceFeeTotal = async (year, month) => {
  */
 export const getAllServiceFees = async () => {
   try {
-    const snapshot = await getDocs(collection(db, 'serviceFees'));
+    const snapshot = await getDocs(collection(db, "serviceFees"));
     const fees = [];
 
     snapshot.forEach((docSnap) => {
@@ -362,7 +385,7 @@ export const getAllServiceFees = async () => {
 
     return fees;
   } catch (error) {
-    console.error('Error fetching all service fees:', error);
+    console.error("Error fetching all service fees:", error);
     throw error;
   }
 };
@@ -375,8 +398,8 @@ export const getAllServiceFees = async () => {
 export const getServiceFeesByHost = async (hostId) => {
   try {
     const q = query(
-      collection(db, 'serviceFees'),
-      where('hostId', '==', hostId)
+      collection(db, "serviceFees"),
+      where("hostId", "==", hostId)
     );
 
     const snapshot = await getDocs(q);
@@ -388,7 +411,7 @@ export const getServiceFeesByHost = async (hostId) => {
 
     return total;
   } catch (error) {
-    console.error('Error fetching service fees by host:', error);
+    console.error("Error fetching service fees by host:", error);
     throw error;
   }
 };

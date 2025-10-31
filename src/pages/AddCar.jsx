@@ -60,9 +60,14 @@ const AddCar = ({ onSuccess }) => {
       }
     }));
   };
-
+  
   const handleImagesChange = (newImages) => {
-    setImages(newImages);
+  console.log('Images received:', newImages);
+    
+  const files = newImages
+    .map((img) => img.file)  
+    .filter(Boolean);     
+  setImages(files);
   };
 
   const validateForm = () => {
