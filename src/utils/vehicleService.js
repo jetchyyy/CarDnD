@@ -80,11 +80,17 @@ export const addVehicle = async (vehicleData, images, hostId) => {
       availability: [],
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
-      phone_number:currentUser.phone
+      // Fix: Use phoneNumber instead of phone, and provide fallback for undefined
+      phone_number: currentUser.phoneNumber || ''
     };
     
+    // Remove any undefined fields before saving to Firestore
+    const cleanVehicleDoc = Object.fromEntries(
+      Object.entries(vehicleDoc).filter(([_, value]) => value !== undefined)
+    );
+    
     // Add document to Firestore
-    const docRef = await addDoc(collection(db, 'vehicles'), vehicleDoc);
+    const docRef = await addDoc(collection(db, 'vehicles'), cleanVehicleDoc);
     
     return docRef.id;
   } catch (error) {
@@ -117,9 +123,14 @@ export const updateVehicle = async (vehicleId, updates, newImages = [], existing
       updatedAt: new Date().toISOString()
     };
     
+    // Remove any undefined fields
+    const cleanUpdateData = Object.fromEntries(
+      Object.entries(updateData).filter(([_, value]) => value !== undefined)
+    );
+    
     // Update document
     const vehicleRef = doc(db, 'vehicles', vehicleId);
-    await updateDoc(vehicleRef, updateData);
+    await updateDoc(vehicleRef, cleanUpdateData);
     
     return vehicleId;
   } catch (error) {
@@ -183,7 +194,8 @@ export const getHostVehicles = async (hostId) => {
 export const formatVehicleData = (formData, vehicleType) => {
   const isCar = vehicleType === 'car';
   
-  return {
+  // Add pickup point data to the vehicle
+  const baseData = {
     type: vehicleType,
     title: `${formData.brand} ${formData.model} ${formData.year}`,
     description: formData.description,
@@ -205,4 +217,19 @@ export const formatVehicleData = (formData, vehicleType) => {
       })
     }
   };
+
+  // Add pickup point information if available
+  if (formData.pickupPoint) {
+    baseData.pickupPoint = formData.pickupPoint;
+  }
+
+  if (formData.pickupCoordinates) {
+    baseData.pickupCoordinates = formData.pickupCoordinates;
+  }
+
+  if (formData.pickupInstructions) {
+    baseData.pickupInstructions = formData.pickupInstructions;
+  }
+
+  return baseData;
 };

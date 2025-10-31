@@ -19,6 +19,7 @@ export default function AdminPanel() {
     { label: 'Transactions', path: '/admin/transactions', icon: CreditCard },
     { label: 'Settings', path: '/admin/settings', icon: Settings },
      { label: 'ID Verification', path: '/admin/id-verification', icon: FileText },
+    { label: 'Refunds', path: '/admin/refunds', icon: FileText },
 
   ];
 
