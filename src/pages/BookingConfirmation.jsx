@@ -118,7 +118,7 @@ const BookingConfirmation = () => {
         totalPrice: totalPrice,
         vehicleTitle: vehicle.title,
         vehicleType: vehicle.type,
-        vehicleImage: vehicle.images?.[0] || '',
+        vehicleImage: vehicle.image?.[0] || '',
         guestName: currentUser.displayName || currentUser.email?.split('@')[0] || 'Guest',
         guestEmail: currentUser.email,
         paymentReceipt: imageUrls[0],
@@ -220,7 +220,7 @@ const BookingConfirmation = () => {
                 <h2 className="text-xl font-bold text-gray-900 mb-4">Vehicle Details</h2>
                 <div className="flex gap-4">
                   <img
-                    src={vehicle.images?.[0] || 'https://via.placeholder.com/200'}
+                    src={vehicle.imageUrls?.[0] || 'https://via.placeholder.com/200'}
                     alt={vehicle.title}
                     className="w-32 h-32 object-cover rounded-lg"
                   />
