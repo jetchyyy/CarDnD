@@ -1,22 +1,7 @@
 // src/utils/vehicleService.js
-import {
-  collection,
-  addDoc,
-  updateDoc,
-  deleteDoc,
-  doc,
-  getDocs,
-  query,
-  where,
-} from "firebase/firestore";
-import {
-  ref,
-  uploadBytes,
-  getDownloadURL,
-  deleteObject,
-  getStorage,
-} from "firebase/storage";
-import { db, storage, auth } from "../firebase/firebase";
+import { updateDoc, doc } from "firebase/firestore";
+import { ref, getDownloadURL, getStorage } from "firebase/storage";
+import { db, storage, auth } from "../src/firebase/firebase";
 
 export const uploadVehicleImages = async (images, vehicleId) => {
   try {

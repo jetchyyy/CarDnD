@@ -7,7 +7,7 @@ import { db } from '../firebase/firebase';
 import { collection, query, where, getDocs, deleteDoc, doc, updateDoc } from 'firebase/firestore';
 import { getHostBookings } from '../utils/bookingService';
 import { createOrGetChat } from '../utils/chatService';
-import { deleteVehicle, getHostVehicles } from '../utils/vehicleService';
+import { deleteVehicle, getHostVehicles } from '../../api/vehicleService';
 
 // Import components
 import StatsCard from "../pages/hostdashboard/StatsCard";

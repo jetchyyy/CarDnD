@@ -21,6 +21,8 @@ import { ref, uploadBytes, getDownloadURL } from "firebase/storage";
  * @returns {Promise<string>} Booking ID
  */
 
+const BASE_URL = import.meta.env.VITE_BASE_URL;
+
 export const uploadPayment = async (images, paymentId) => {
   try {
     const MAX_SIZE = 5 * 1024 * 1024;
@@ -103,13 +105,9 @@ export const createBooking = async (bookingData) => {
       },
     };
 
-    // Create booking document
-    const docRef = await addDoc(collection(db, "bookings"), booking);
-    const bookingId = docRef.id;
-
     // Create service fee tracking record
     const serviceFeeRecord = {
-      bookingId: bookingId,
+      bookingId: null,
       guestId: bookingData.guestId,
       hostId: bookingData.hostId,
       carId: bookingData.carId,
@@ -124,9 +122,22 @@ export const createBooking = async (bookingData) => {
       vehicleTitle: bookingData.vehicleTitle,
     };
 
-    // Add to serviceFees collection
-    await addDoc(collection(db, "serviceFees"), serviceFeeRecord);
-    return bookingId;
+    const token = await auth.currentUser.getIdToken();
+
+    const res = await fetch(`http://localhost:3000/create-bookings`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${token}`,
+      },
+      body: JSON.stringify({ booking, serviceFeeRecord }),
+    });
+    const data = await res.json();
+
+    if (!res.ok) {
+      throw new Error(data.error || "Failed to create booking");
+    }
+    return data.bookingId;
   } catch (error) {
     console.error("Error creating booking:", error);
     throw error;
