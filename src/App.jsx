@@ -21,6 +21,8 @@ import Profile from './pages/Profile';
 import ChatsList from './pages/ChatsList';
 import Chat from './pages/Chat';
 import MyBookings from './pages/MyBookings';
+import TermsOfService from './pages/terms-and-condition/TermsOfSerivce';
+import CancelationPolicy from './pages/terms-and-condition/CancellationPolicy';
 
 // Admin Pages
 import AdminPanel from './pages/admin/AdminPanel';
@@ -33,6 +35,7 @@ import AdminSettings from './pages/admin/AdminSettings';
 import AdminPayouts from './pages/admin/AdminPayouts';
 import AdminIDVerification from './pages/admin/AdminIDVerification';
 import AdminReports from './pages/admin/AdminReports';
+import AdminRefunds from './pages/admin/AdminRefunds';
 
 // Protected Route Component for regular authenticated users
 const ProtectedRoute = ({ children }) => {
@@ -105,6 +108,8 @@ function App() {
             <Route path="/signup" element={<MainLayout><SignUp /></MainLayout>} />
             <Route path="/vehicles" element={<MainLayout><CarList /></MainLayout>} />
             <Route path="/vehicles/:id" element={<MainLayout><VehicleDetails /></MainLayout>} />
+            <Route path="/terms-of-service" element={<MainLayout><TermsOfService /></MainLayout>} />
+            <Route path="/cancellation-policy" element={<MainLayout><CancelationPolicy /></MainLayout>} />
             
             {/* Protected Routes - Require Authentication */}
             <Route 
@@ -199,6 +204,7 @@ function App() {
               <Route path="settings" element={<AdminSettings />} />
               <Route path="payouts" element={<AdminPayouts />} />
               <Route path="id-verification" element={<AdminIDVerification />} />
+              <Route path="refunds" element={<AdminRefunds />} />
             </Route>
           </Routes>
         </ProfileCompletionChecker>

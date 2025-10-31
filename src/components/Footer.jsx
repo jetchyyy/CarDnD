@@ -1,4 +1,5 @@
 import { Car, Facebook, Instagram, Twitter, Mail, Phone, MapPin } from 'lucide-react';
+import { Link } from 'react-router-dom';
 
 const Footer = () => {
   const currentYear = new Date().getFullYear();
@@ -103,7 +104,7 @@ const Footer = () => {
             </p>
             <div className="flex space-x-6 text-sm">
               <button className="hover:text-blue-400 transition-colors">Privacy Policy</button>
-              <button className="hover:text-blue-400 transition-colors">Terms of Service</button>
+            <Link to="/terms-of-service" className="hover:text-blue-400 transition-colors">Terms of Service</Link>
               <button className="hover:text-blue-400 transition-colors">Cookie Policy</button>
             </div>
           </div>

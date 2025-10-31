@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import {
   MapPin,
@@ -15,7 +15,8 @@ import {
   X,
   MessageCircle,
   Lock,
-  AlertCircle
+  AlertCircle,
+  Navigation
 } from 'lucide-react';
 import GuestBookingCalendar from '../components/GuestBookingCalendar';
 import { db, auth } from '../firebase/firebase';
@@ -27,6 +28,10 @@ const VehicleDetails = () => {
   const { id } = useParams();
   const navigate = useNavigate();
   const { user } = useAuth();
+  const mapRef = useRef(null);
+  const mapInstanceRef = useRef(null);
+  const markerRef = useRef(null);
+  
   const [vehicle, setVehicle] = useState(null);
   const [bookings, setBookings] = useState([]);
   const [reviews, setReviews] = useState([]);
@@ -39,11 +44,68 @@ const VehicleDetails = () => {
     endDate: ''
   });
   const [messageLoading, setMessageLoading] = useState(false);
+  const [mapLoaded, setMapLoaded] = useState(false);
 
   // Check if user can book (ID verified)
   const canBook = user?.idVerificationStatus === 'approved';
   const isPending = user?.idVerificationStatus === 'pending';
   const needsVerification = !user?.idVerificationStatus || user?.idVerificationStatus === 'idle' || user?.idVerificationStatus === 'rejected';
+
+  // Load Leaflet CSS and JS
+  useEffect(() => {
+    const link = document.createElement('link');
+    link.rel = 'stylesheet';
+    link.href = 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.css';
+    link.integrity = 'sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=';
+    link.crossOrigin = '';
+    document.head.appendChild(link);
+
+    const script = document.createElement('script');
+    script.src = 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.js';
+    script.integrity = 'sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=';
+    script.crossOrigin = '';
+    script.async = true;
+    script.onload = () => setMapLoaded(true);
+    document.head.appendChild(script);
+
+    return () => {
+      if (mapInstanceRef.current) {
+        mapInstanceRef.current.remove();
+      }
+    };
+  }, []);
+
+  // Initialize map when vehicle data and Leaflet are loaded
+  useEffect(() => {
+    if (!mapLoaded || !vehicle || !vehicle.pickupCoordinates || !mapRef.current || mapInstanceRef.current) return;
+
+    const { lat, lng } = vehicle.pickupCoordinates;
+    
+    // Initialize map
+    const map = window.L.map(mapRef.current).setView([lat, lng], 15);
+
+    // Add OpenStreetMap tiles
+    window.L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+      attribution: '© OpenStreetMap contributors',
+      maxZoom: 19,
+    }).addTo(map);
+
+    mapInstanceRef.current = map;
+
+    // Add marker for pickup point
+    const marker = window.L.marker([lat, lng]).addTo(map);
+    
+    // Add popup to marker
+    marker.bindPopup(`
+      <div style="text-align: center;">
+        <strong>Pickup Point</strong><br/>
+        ${vehicle.pickupPoint || 'Vehicle pickup location'}
+      </div>
+    `).openPopup();
+
+    markerRef.current = marker;
+
+  }, [mapLoaded, vehicle]);
 
   // Fetch vehicle details
   useEffect(() => {
@@ -251,6 +313,13 @@ const VehicleDetails = () => {
     }
   };
 
+  const openInGoogleMaps = () => {
+    if (vehicle.pickupCoordinates) {
+      const { lat, lng } = vehicle.pickupCoordinates;
+      window.open(`https://www.google.com/maps/search/?api=1&query=${lat},${lng}`, '_blank');
+    }
+  };
+
   const renderStars = (rating) => {
     return [...Array(5)].map((_, i) => (
       <Star
@@ -378,6 +447,57 @@ const VehicleDetails = () => {
               )}
             </div>
 
+            {/* Pickup Location Map */}
+            {vehicle.pickupCoordinates && (
+              <div className="bg-white rounded-xl shadow-md p-6 mb-8">
+                <div className="flex items-center justify-between mb-4">
+                  <h2 className="text-2xl font-bold text-gray-900 flex items-center">
+                    <Navigation className="w-6 h-6 mr-2 text-blue-600" />
+                    Pickup Location
+                  </h2>
+                  <button
+                    onClick={openInGoogleMaps}
+                    className="flex items-center gap-2 text-blue-600 hover:text-blue-700 font-medium text-sm"
+                  >
+                    <MapPin className="w-4 h-4" />
+                    Open in Maps
+                  </button>
+                </div>
+                
+                {vehicle.pickupPoint && (
+                  <div className="mb-4 p-3 bg-gray-50 rounded-lg">
+                    <p className="text-sm text-gray-600 mb-1">Address:</p>
+                    <p className="text-gray-900 font-medium">{vehicle.pickupPoint}</p>
+                  </div>
+                )}
+
+                {vehicle.pickupInstructions && (
+                  <div className="mb-4 p-3 bg-blue-50 rounded-lg border border-blue-100">
+                    <p className="text-sm text-blue-900 font-semibold mb-1">Pickup Instructions:</p>
+                    <p className="text-sm text-blue-800">{vehicle.pickupInstructions}</p>
+                  </div>
+                )}
+
+                <div 
+                  ref={mapRef}
+                  className="w-full h-80 rounded-lg border-2 border-gray-300 overflow-hidden relative z-0"
+                >
+                  {!mapLoaded && (
+                    <div className="flex items-center justify-center h-full bg-gray-100">
+                      <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+                      <span className="ml-2 text-gray-600">Loading map...</span>
+                    </div>
+                  )}
+                </div>
+
+                {vehicle.pickupCoordinates && (
+                  <p className="text-xs text-gray-500 mt-2">
+                    Coordinates: {vehicle.pickupCoordinates.lat.toFixed(6)}, {vehicle.pickupCoordinates.lng.toFixed(6)}
+                  </p>
+                )}
+              </div>
+            )}
+
             {/* Booking Calendar */}
             <GuestBookingCalendar 
               vehicle={vehicle} 
@@ -467,7 +587,7 @@ const VehicleDetails = () => {
             {/* Description */}
             <div className="bg-white rounded-xl shadow-md p-6 mb-8">
               <h2 className="text-2xl font-bold text-gray-900 mb-4">Description</h2>
-              <p className="text-gray-700 leading-relaxed">{vehicle.description}</p>
+              <p className="text-gray-700 leading-relaxed whitespace-pre-line">{vehicle.description}</p>
             </div>
 
             {/* Host Info */}
