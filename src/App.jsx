@@ -5,6 +5,7 @@ import ProfileCompletionChecker from './components/ProfileCompletionChecker';
 // Components
 import Navbar from './components/Navbar';
 import Footer from './components/Footer';
+import CookieConsent from './components/CookieConsent';
 
 // Pages
 import Home from './pages/Home';
@@ -83,6 +84,7 @@ const MainLayout = ({ children }) => {
       <Navbar />
       <main className="flex-grow">{children}</main>
       <Footer />
+      <CookieConsent />
     </div>
   );
 };
