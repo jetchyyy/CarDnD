@@ -64,7 +64,7 @@ const BookingsTab = ({
                 <td className="px-6 py-4">
                   <div className="flex items-center">
                     <img 
-                      src={booking.vehicleDetails?.image || 'https://via.placeholder.com/50'}
+                      src={booking.vehicleDetails?.imageUrls|| 'https://via.placeholder.com/50'}
                       alt={booking.vehicleDetails?.title}
                       className="w-12 h-12 rounded-lg object-cover mr-3"
                     />

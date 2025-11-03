@@ -43,6 +43,7 @@ export const getVerificationStatus = (user) => {
         canAddVehicle: true,
         message: 'Your ID is verified',
         requiresAction: false
+      
       };
       
     case 'pending':
