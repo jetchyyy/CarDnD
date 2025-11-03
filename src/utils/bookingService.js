@@ -8,8 +8,7 @@ import {
   where,
   getDocs,
 } from "firebase/firestore";
-import { db, storage, auth } from "../firebase/firebase";
-import { ref, uploadBytes, getDownloadURL } from "firebase/storage";
+import { db, auth } from "../firebase/firebase";
 
 /**
  * Upload payment proof images to Firebase Storage
@@ -92,7 +91,7 @@ export const createBooking = async (bookingData) => {
       vehicleDetails: {
         title: bookingData.vehicleTitle,
         type: bookingData.vehicleType,
-        image: bookingData.vehicleImage,
+        imageUrls: bookingData.vehicleImage,
       },
       guestDetails: {
         name: bookingData.guestName,
@@ -124,7 +123,7 @@ export const createBooking = async (bookingData) => {
 
     const token = await auth.currentUser.getIdToken();
 
-    const res = await fetch(`http://localhost:3000/create-bookings`, {
+    const res = await fetch(`${BASE_URL}/create-bookings`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
@@ -149,23 +148,21 @@ export const createBooking = async (bookingData) => {
  * @param {string} guestId - Guest user ID
  * @returns {Promise<Array>} Array of bookings
  */
-export const getGuestBookings = async (guestId) => {
+export const getGuestBookings = async () => {
   try {
-    const q = query(
-      collection(db, "bookings"),
-      where("guestId", "==", guestId)
-    );
-    const snapshot = await getDocs(q);
-
-    const bookings = [];
-    snapshot.forEach((doc) => {
-      bookings.push({
-        id: doc.id,
-        ...doc.data(),
-      });
+    const token = await auth.currentUser.getIdToken();
+    const res = await fetch(`${BASE_URL}/get-guest-bookings`, {
+      method: "GET",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${token}`,
+      },
     });
-
-    return bookings;
+    const data = await res.json();
+    if (!res.ok) {
+      throw new Error(data.error || "Failed to fetch geust booking");
+    }
+    return data;
   } catch (error) {
     console.error("Error fetching guest bookings:", error);
     throw error;
@@ -177,20 +174,25 @@ export const getGuestBookings = async (guestId) => {
  * @param {string} hostId - Host user ID
  * @returns {Promise<Array>} Array of bookings
  */
-export const getHostBookings = async (hostId) => {
+export const getHostBookings = async () => {
   try {
-    const q = query(collection(db, "bookings"), where("hostId", "==", hostId));
-    const snapshot = await getDocs(q);
+    const token = await auth.currentUser.getIdToken();
 
-    const bookings = [];
-    snapshot.forEach((doc) => {
-      bookings.push({
-        id: doc.id,
-        ...doc.data(),
-      });
+    const res = await fetch(`${BASE_URL}/get-host-bookings`, {
+      method: "GET",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${token}`,
+      },
     });
 
-    return bookings;
+    const data = await res.json();
+
+    if (!res.ok) {
+      throw new Error(data.message || "Failed to fetch host bookings");
+    }
+
+    return data;
   } catch (error) {
     console.error("Error fetching host bookings:", error);
     throw error;

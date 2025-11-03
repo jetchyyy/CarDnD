@@ -3,6 +3,8 @@ import { updateDoc, doc } from "firebase/firestore";
 import { ref, getDownloadURL, getStorage } from "firebase/storage";
 import { db, storage, auth } from "../src/firebase/firebase";
 
+const BASE_URL = import.meta.env.VITE_BASE_URL;
+
 export const uploadVehicleImages = async (images, vehicleId) => {
   try {
     const FILE_MAX_SIZE = 2 * 1024 * 1024;
@@ -185,22 +187,19 @@ export const deleteVehicle = async (vehicleId) => {
  * @param {string} hostId - Host user ID
  * @returns {Promise<Array>} Array of vehicle documents
  */
-export const getHostVehicles = async (userId) => {
+export const getHostVehicles = async () => {
   try {
     const currentUser = auth.currentUser;
     if (!currentUser) throw new Error("User must be authenticated");
     const token = await currentUser.getIdToken();
 
-    const res = await fetch(
-      `http://localhost:3000/get-host-vehicles/${userId}`,
-      {
-        method: "GET",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
-        },
-      }
-    );
+    const res = await fetch(`http://localhost:3000/get-host-vehicles`, {
+      method: "GET",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${token}`,
+      },
+    });
     const data = await res.json();
     if (!res.ok) throw new Error(data.error || "Failed to fetch data");
     return data;
@@ -259,4 +258,25 @@ export const formatVehicleData = (formData, vehicleType) => {
   }
 
   return baseData;
+};
+
+export const fetchVehicleCount = async () => {
+  try {
+    const token = await auth.currentUser.getIdToken();
+    const res = await fetch(`${BASE_URL}/get-host-vehicles`, {
+      method: "GET",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${token}`,
+      },
+    });
+    const data = await res.json();
+    if (!res.ok) {
+      throw new Error(data.error || "Failed to fetch host vehicles");
+    }
+    return data.length;
+  } catch (error) {
+    console.error("Error fetching vehicle count:", error);
+    throw error;
+  }
 };

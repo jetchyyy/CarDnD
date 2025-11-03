@@ -50,7 +50,7 @@ const HostDashboard = () => {
 
       try {
         setLoading(true);
-        const vehicles = await getHostVehicles(user.userId)
+        const vehicles = await getHostVehicles()
         setVehicles(vehicles)
       } catch (error) {
         console.error('Error fetching vehicles:', error);
@@ -75,11 +75,11 @@ const HostDashboard = () => {
 
       try {
         setBookingsLoading(true);
-        const hostBookings = await getHostBookings(user.userId);
+        const hostBookings = await getHostBookings();
         hostBookings.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
         setBookings(hostBookings);
       } catch (error) {
-        console.error('Error fetching bookings:', error);
+        console.error('Error fetching bookings:',error);
       } finally {
         setBookingsLoading(false);
       }

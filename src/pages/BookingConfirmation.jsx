@@ -118,7 +118,7 @@ const BookingConfirmation = () => {
         totalPrice: totalPrice,
         vehicleTitle: vehicle.title,
         vehicleType: vehicle.type,
-        vehicleImage: vehicle.image?.[0] || '',
+        vehicleImage: vehicle.imageUrls?.[0] || '',
         guestName: currentUser.displayName || currentUser.email?.split('@')[0] || 'Guest',
         guestEmail: currentUser.email,
         paymentReceipt: imageUrls[0],

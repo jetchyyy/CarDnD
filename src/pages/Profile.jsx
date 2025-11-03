@@ -9,6 +9,9 @@ import ProfileInfoForm from '../profilecomponents/ProfileInfoForm';
 import PayoutHistory from '../profilecomponents/PayoutHistory';
 import BookingHistory from '../profilecomponents/BookingHistory';
 import PayoutMethods from '../components/PayoutMethods';
+import { fetchVehicleCount } from '../../api/vehicleService';
+import { getGuestBookings } from '../utils/bookingService';
+import { getPayout } from '../../api/transaction';
 
 const Profile = () => {
   const navigate = useNavigate();
@@ -96,14 +99,10 @@ const Profile = () => {
       }
     };
 
-    const fetchVehicleCount = async () => {
+    const VehicleCount = async () => {
       try {
-        const q = query(
-          collection(db, 'vehicles'),
-          where('hostId', '==', user.userId)
-        );
-        const snapshot = await getDocs(q);
-        setVehicleCount(snapshot.size);
+        const vehicleCount = await fetchVehicleCount()
+        setVehicleCount(vehicleCount);
       } catch (error) {
         console.error('Error fetching vehicle count:', error);
       }
@@ -111,23 +110,19 @@ const Profile = () => {
 
     const fetchBookings = async () => {
       try {
-        const q = query(
-          collection(db, 'bookings'),
-          where('guestId', '==', user.userId)
-        );
-        const snapshot = await getDocs(q);
+        const bookingsData = await getGuestBookings()
         
-        const bookings = snapshot.docs.map(doc => {
-          const data = doc.data();
-          return {
-            id: doc.id,
-            vehicleName: data.vehicleDetails?.title || 'Vehicle',
-            type: data.vehicleDetails?.type || 'car',
-            date: `${new Date(data.startDate).toLocaleDateString()} to ${new Date(data.endDate).toLocaleDateString()}`,
-            amount: `₱${data.totalPrice?.toLocaleString() || '0'}`,
-            status: data.status.charAt(0).toUpperCase() + data.status.slice(1)
-          };
-        });
+        const bookings = bookingsData.map((data) => ({
+          id: data.id,
+          vehicleName: data.vehicleDetails?.title || "Vehicle",
+          type: data.vehicleDetails?.type || "Car",
+          date: `${new Date(data.startDate).toLocaleDateString()} to ${new Date(data.endDate).toLocaleDateString()}`,
+          amount: `₱${data.totalPrice?.toLocaleString() || "0"}`,
+          status: data.status
+            ? data.status.charAt(0).toUpperCase() + data.status.slice(1)
+            : "Unknown",
+          createdAt: data.createdAt || new Date().toISOString(),
+        }));
         
         bookings.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
         setBookingHistory(bookings.slice(0, 10));
@@ -140,17 +135,7 @@ const Profile = () => {
 
     const fetchPayouts = async () => {
       try {
-        const q = query(
-          collection(db, 'payoutTransactions'),
-          where('hostId', '==', user.userId),
-          where('status', '==', 'completed')
-        );
-        const snapshot = await getDocs(q);
-
-        const payouts = snapshot.docs.map(doc => ({
-          id: doc.id,
-          ...doc.data()
-        }));
+        const payouts = await getPayout()
 
         payouts.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
         setPayoutHistory(payouts);
@@ -190,7 +175,7 @@ const Profile = () => {
 
     fetchProfile();
     fetchBookings();
-    fetchVehicleCount();
+    VehicleCount();
     fetchPayouts();
   }, [user, authLoading, navigate]);
 
