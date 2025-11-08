@@ -1,5 +1,6 @@
 // pages/HostDashboard/components/VehiclesTab.jsx
-import { Car, Bike, Plus, Eye, Edit, Trash2, Lock } from 'lucide-react';
+import { useState } from 'react';
+import { Car, Bike, Plus, Eye, Edit, Trash2, Lock, Link, Check } from 'lucide-react';
 
 const VehiclesTab = ({ 
   vehicles, 
@@ -9,6 +10,39 @@ const VehiclesTab = ({
   handleDelete,
   getStatusColor 
 }) => {
+  const [copiedId, setCopiedId] = useState(null);
+
+  const handleCopyLink = async (vehicleId) => {
+    const vehicleUrl = `${window.location.origin}/vehicles/${vehicleId}`;
+    
+    try {
+      await navigator.clipboard.writeText(vehicleUrl);
+      setCopiedId(vehicleId);
+      
+      // Reset the copied state after 2 seconds
+      setTimeout(() => {
+        setCopiedId(null);
+      }, 2000);
+    } catch (err) {
+      console.error('Failed to copy link:', err);
+      // Fallback for older browsers
+      const textArea = document.createElement('textarea');
+      textArea.value = vehicleUrl;
+      document.body.appendChild(textArea);
+      textArea.select();
+      try {
+        document.execCommand('copy');
+        setCopiedId(vehicleId);
+        setTimeout(() => {
+          setCopiedId(null);
+        }, 2000);
+      } catch (err) {
+        console.error('Fallback: Failed to copy', err);
+      }
+      document.body.removeChild(textArea);
+    }
+  };
+
   if (loading) {
     return <p className="text-gray-500 text-center py-10">Loading vehicles...</p>;
   }
@@ -110,6 +144,17 @@ const VehiclesTab = ({
                 <button className="flex-1 flex items-center justify-center space-x-1 bg-blue-600 hover:bg-blue-700 text-white px-3 py-2 rounded-lg text-sm font-medium transition-colors">
                   <Eye className="w-4 h-4" />
                   <span>View</span>
+                </button>
+                <button
+                  onClick={() => handleCopyLink(v.id)}
+                  className="flex items-center justify-center bg-green-100 hover:bg-green-200 text-green-700 px-3 py-2 rounded-lg transition-colors relative"
+                  title="Copy listing link"
+                >
+                  {copiedId === v.id ? (
+                    <Check className="w-4 h-4" />
+                  ) : (
+                    <Link className="w-4 h-4" />
+                  )}
                 </button>
                 <button
                   className="flex items-center justify-center bg-gray-100 hover:bg-gray-200 text-gray-700 px-3 py-2 rounded-lg transition-colors"
