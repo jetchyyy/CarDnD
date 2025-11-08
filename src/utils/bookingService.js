@@ -4,18 +4,76 @@ import { db, storage } from '../firebase/firebase';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 
 /**
- * Upload payment proof images to Firebase Storage
+ * Get platform settings including tiered service fee percentages
+ * @returns {Promise<Object>} Platform settings
  */
-
+export const getPlatformSettings = async () => {
+  try {
+    const settingsRef = doc(db, 'settings', 'platformSettings');
+    const settingsSnap = await getDoc(settingsRef);
+    
+    if (settingsSnap.exists()) {
+      return settingsSnap.data();
+    } else {
+      // Return default settings if none exist
+      return {
+        serviceFeeThreshold: 2000,
+        serviceFeeAboveThreshold: 5,
+        serviceFeeBelowThreshold: 3,
+        platformName: 'VehicleHub',
+        platformEmail: 'admin@vehiclehub.com',
+      };
+    }
+  } catch (error) {
+    console.error('Error fetching platform settings:', error);
+    // Return default on error
+    return {
+      serviceFeeThreshold: 2000,
+      serviceFeeAboveThreshold: 5,
+      serviceFeeBelowThreshold: 3,
+    };
+  }
+};
 
 /**
- * Create a new booking and track service fee
- * @param {Object} bookingData - Booking information
- * @returns {Promise<string>} Booking ID
+ * Calculate service fee based on tiered pricing
+ * @param {number} totalPrice - Total booking price
+ * @param {Object} settings - Platform settings
+ * @returns {Object} Service fee details
  */
-
-export const uploadPayment = async (images, paymentId) => {
+export const calculateServiceFee = (totalPrice, settings) => {
+  const threshold = settings.serviceFeeThreshold || 2000;
+  const aboveRate = settings.serviceFeeAboveThreshold || 5;
+  const belowRate = settings.serviceFeeBelowThreshold || 3;
   
+  let serviceFeePercentage;
+  let tier;
+  
+  if (totalPrice >= threshold) {
+    serviceFeePercentage = aboveRate;
+    tier = 'above';
+  } else {
+    serviceFeePercentage = belowRate;
+    tier = 'below';
+  }
+  
+  const serviceFeeAmount = (totalPrice * serviceFeePercentage) / 100;
+  const hostEarnings = totalPrice - serviceFeeAmount;
+  
+  return {
+    serviceFeeAmount,
+    serviceFeePercentage,
+    hostEarnings,
+    tier,
+    threshold,
+    appliedRate: serviceFeePercentage,
+  };
+};
+
+/**
+ * Upload payment proof images to Firebase Storage
+ */
+export const uploadPayment = async (images, paymentId) => {
   if (!images) throw new Error("No images provided to uploadPayment.");
 
   const files = Array.isArray(images) ? images : [images];
@@ -43,13 +101,19 @@ export const uploadPayment = async (images, paymentId) => {
 
   return imageUrls;
 };
-export const createBooking = async (bookingData) => {
 
+/**
+ * Create a new booking and track service fee with tiered pricing
+ * @param {Object} bookingData - Booking information
+ * @returns {Promise<string>} Booking ID
+ */
+export const createBooking = async (bookingData) => {
   try {
-    // Calculate service fee (5% of total price)
-    const serviceFeePercentage = 0.05;
-    const serviceFeeAmount = bookingData.totalPrice * serviceFeePercentage;
-    const hostEarnings = bookingData.totalPrice - serviceFeeAmount; // What host receives
+    // Fetch current platform settings to get tiered service fee
+    const settings = await getPlatformSettings();
+    
+    // Calculate service fee based on booking amount and tier
+    const feeCalculation = calculateServiceFee(bookingData.totalPrice, settings);
 
     const booking = {
       carId: bookingData.carId,
@@ -57,11 +121,11 @@ export const createBooking = async (bookingData) => {
       hostId: bookingData.hostId,
       startDate: bookingData.startDate,
       endDate: bookingData.endDate,
-      totalPrice: bookingData.totalPrice, // Total paid by guest
-      hostEarnings: hostEarnings, // Amount owed to host (after service fee)
-      status: 'confirmed',
+      totalPrice: bookingData.totalPrice,
+      hostEarnings: feeCalculation.hostEarnings,
+      status: 'pending',
       createdAt: new Date().toISOString(),
-      paidOutAt: null, // Initialize as null - will be set when admin processes payout
+      paidOutAt: null,
       vehicleDetails: {
         title: bookingData.vehicleTitle,
         type: bookingData.vehicleType,
@@ -73,8 +137,10 @@ export const createBooking = async (bookingData) => {
       },
       paymentReceipt: bookingData.paymentReceipt,
       serviceFee: {
-        amount: serviceFeeAmount,
-        percentage: serviceFeePercentage * 100,
+        amount: feeCalculation.serviceFeeAmount,
+        percentage: feeCalculation.serviceFeePercentage,
+        tier: feeCalculation.tier,
+        threshold: feeCalculation.threshold,
       },
     };
 
@@ -88,10 +154,12 @@ export const createBooking = async (bookingData) => {
       guestId: bookingData.guestId,
       hostId: bookingData.hostId,
       carId: bookingData.carId,
-      amount: serviceFeeAmount,
-      percentage: serviceFeePercentage * 100,
+      amount: feeCalculation.serviceFeeAmount,
+      percentage: feeCalculation.serviceFeePercentage,
       baseAmount: bookingData.totalPrice,
-      hostEarnings: hostEarnings, // Track what host should receive
+      hostEarnings: feeCalculation.hostEarnings,
+      tier: feeCalculation.tier,
+      threshold: feeCalculation.threshold,
       status: 'collected',
       collectedAt: new Date().toISOString(),
       month: new Date().getMonth() + 1,
@@ -103,8 +171,9 @@ export const createBooking = async (bookingData) => {
     await addDoc(collection(db, 'serviceFees'), serviceFeeRecord);
 
     console.log('Booking created successfully with ID:', bookingId);
-    console.log('Service fee collected:', serviceFeeAmount);
-    console.log('Host will receive:', hostEarnings);
+    console.log(`Service fee tier: ${feeCalculation.tier} (${feeCalculation.serviceFeePercentage}%)`);
+    console.log('Service fee collected:', feeCalculation.serviceFeeAmount);
+    console.log('Host will receive:', feeCalculation.hostEarnings);
 
     return bookingId;
   } catch (error) {
@@ -389,6 +458,50 @@ export const getServiceFeesByHost = async (hostId) => {
     return total;
   } catch (error) {
     console.error('Error fetching service fees by host:', error);
+    throw error;
+  }
+};
+
+/**
+ * Get service fee statistics by tier
+ * @returns {Promise<Object>} Statistics for above and below threshold
+ */
+export const getServiceFeeStatsByTier = async () => {
+  try {
+    const snapshot = await getDocs(collection(db, 'serviceFees'));
+    
+    let aboveThresholdTotal = 0;
+    let belowThresholdTotal = 0;
+    let aboveThresholdCount = 0;
+    let belowThresholdCount = 0;
+
+    snapshot.forEach((docSnap) => {
+      const fee = docSnap.data();
+      if (fee.tier === 'above') {
+        aboveThresholdTotal += fee.amount;
+        aboveThresholdCount++;
+      } else if (fee.tier === 'below') {
+        belowThresholdTotal += fee.amount;
+        belowThresholdCount++;
+      }
+    });
+
+    return {
+      aboveThreshold: {
+        total: aboveThresholdTotal,
+        count: aboveThresholdCount,
+        average: aboveThresholdCount > 0 ? aboveThresholdTotal / aboveThresholdCount : 0,
+      },
+      belowThreshold: {
+        total: belowThresholdTotal,
+        count: belowThresholdCount,
+        average: belowThresholdCount > 0 ? belowThresholdTotal / belowThresholdCount : 0,
+      },
+      total: aboveThresholdTotal + belowThresholdTotal,
+      totalCount: aboveThresholdCount + belowThresholdCount,
+    };
+  } catch (error) {
+    console.error('Error fetching service fee stats by tier:', error);
     throw error;
   }
 };
