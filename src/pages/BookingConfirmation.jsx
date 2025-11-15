@@ -28,6 +28,8 @@ const BookingConfirmation = () => {
   const [error, setError] = useState('');
   const [isChecking, setIsChecking] = useState(true);
   const [showPayment, setShowPayment] = useState(false);
+  const [agreedToTerms, setAgreedToTerms] = useState(false);
+  const [agreedToCancellation, setAgreedToCancellation] = useState(false);
 
   const qrCodeUrl = "Images"; // Replace with your actual QR code URL
 
@@ -126,6 +128,7 @@ const BookingConfirmation = () => {
       
       const bookingId = await createBooking(bookingData);
       try {
+        const days = calculateDays();
         const templateParams = {
           email:currentUser.email,
           username:currentUser.displayName || currentUser.email?.split('@')[0] || 'Guest',
@@ -311,8 +314,7 @@ const BookingConfirmation = () => {
               </div>
             </div>
 
-            {/* Price Summary - Sticky */}
-            <div className="lg:col-span-1">
+           <div className="lg:col-span-1">
               <div className="bg-white rounded-xl shadow-md p-6 sticky top-24">
                 <h2 className="text-xl font-bold text-gray-900 mb-4">Price Summary</h2>
                 
@@ -330,9 +332,63 @@ const BookingConfirmation = () => {
                   </div>
                 </div>
 
+                <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-4">
+                  <div className="flex items-start space-x-2">
+                    <AlertCircle className="w-5 h-5 text-blue-600 flex-shrink-0 mt-0.5" />
+                    <div className="text-sm text-blue-800">
+                      <p className="font-semibold mb-1">Payment & Refund Policy</p>
+                      <p>You will pay now to secure your booking. If the host doesn't respond within 24 hours, you will receive a full refund automatically.</p>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="space-y-3 mb-4">
+                  <label className="flex items-start space-x-3 cursor-pointer group">
+                    <input
+                      type="checkbox"
+                      checked={agreedToTerms}
+                      onChange={(e) => setAgreedToTerms(e.target.checked)}
+                      className="mt-1 w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500 cursor-pointer"
+                    />
+                    <span className="text-sm text-gray-700 select-none">
+                      I agree to the{' '}
+                      <a
+                        href="/terms-of-service"
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-blue-600 hover:text-blue-800 underline font-medium"
+                        onClick={(e) => e.stopPropagation()}
+                      >
+                        Terms of Service
+                      </a>
+                    </span>
+                  </label>
+
+                  <label className="flex items-start space-x-3 cursor-pointer group">
+                    <input
+                      type="checkbox"
+                      checked={agreedToCancellation}
+                      onChange={(e) => setAgreedToCancellation(e.target.checked)}
+                      className="mt-1 w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500 cursor-pointer"
+                    />
+                    <span className="text-sm text-gray-700 select-none">
+                      I agree to the{' '}
+                      <a
+                        href="/cancellation-policy"
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-blue-600 hover:text-blue-800 underline font-medium"
+                        onClick={(e) => e.stopPropagation()}
+                      >
+                        Cancellation Policy
+                      </a>
+                    </span>
+                  </label>
+                </div>
+
                 <button
                   onClick={() => setShowPayment(true)}
-                  disabled={loading || !!error}
+                  disabled={loading || !!error || !agreedToTerms || !agreedToCancellation}
                   className="w-full bg-blue-600 hover:bg-blue-700 disabled:bg-gray-400 disabled:cursor-not-allowed text-white font-semibold py-3 rounded-lg transition-colors flex items-center justify-center space-x-2 mb-4"
                 >
                   {loading ? (
@@ -355,7 +411,7 @@ const BookingConfirmation = () => {
                 >
                   Go Back
                 </button>
-
+              
                 {error && (
                   <div className="mt-4 p-3 bg-yellow-50 border border-yellow-200 rounded-lg">
                     <div className="flex items-start">

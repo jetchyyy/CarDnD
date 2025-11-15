@@ -20,7 +20,8 @@ import {
   Loader,
   CheckCircle,
   Clock,
-  TrendingUp
+  TrendingUp,
+  Info
 } from 'lucide-react';
 
 export default function AdminPayouts() {
@@ -41,11 +42,36 @@ export default function AdminPayouts() {
   const [payoutHistory, setPayoutHistory] = useState([]);
   const [selectedForDetails, setSelectedForDetails] = useState(null);
   const [showDetailsModal, setShowDetailsModal] = useState(false);
+  const [platformSettings, setPlatformSettings] = useState(null);
 
   useEffect(() => {
+    fetchPlatformSettings();
     fetchPayoutMethods();
     fetchPayoutHistory();
   }, [filter]);
+
+  const fetchPlatformSettings = async () => {
+    try {
+      const settingsRef = doc(db, 'settings', 'platformSettings');
+      const settingsSnap = await getDoc(settingsRef);
+      if (settingsSnap.exists()) {
+        setPlatformSettings(settingsSnap.data());
+      } else {
+        setPlatformSettings({
+          serviceFeeThreshold: 2000,
+          serviceFeeAboveThreshold: 5,
+          serviceFeeBelowThreshold: 3
+        });
+      }
+    } catch (error) {
+      console.error('Error fetching platform settings:', error);
+      setPlatformSettings({
+        serviceFeeThreshold: 2000,
+        serviceFeeAboveThreshold: 5,
+        serviceFeeBelowThreshold: 3
+      });
+    }
+  };
 
   const fetchPayoutMethods = async () => {
     try {
@@ -71,6 +97,14 @@ export default function AdminPayouts() {
         // Fetch host's unpaid bookings to calculate earnings
         let totalEarnings = 0;
         let unpaidBookingIds = [];
+        let serviceFeeBreakdown = {
+          totalServiceFees: 0,
+          aboveThresholdFees: 0,
+          belowThresholdFees: 0,
+          aboveThresholdCount: 0,
+          belowThresholdCount: 0
+        };
+
         try {
           const bookingsQuery = query(
             collection(db, 'bookings'),
@@ -81,13 +115,28 @@ export default function AdminPayouts() {
           
           bookingsSnap.docs.forEach(booking => {
             const bookingData = booking.data();
-            // Use hostEarnings (totalPrice - serviceFee) instead of totalPrice
             const earnings = bookingData.hostEarnings || 0;
             
             // Check if booking has NOT been paid out
             if (!bookingData.paidOutAt) {
               unpaidBookingIds.push(booking.id);
               totalEarnings += (typeof earnings === 'number' ? earnings : 0);
+
+              // Track service fee breakdown
+              if (bookingData.serviceFee) {
+                const serviceFeeAmount = bookingData.serviceFee.amount || 0;
+                const tier = bookingData.serviceFee.tier;
+                
+                serviceFeeBreakdown.totalServiceFees += serviceFeeAmount;
+                
+                if (tier === 'above') {
+                  serviceFeeBreakdown.aboveThresholdFees += serviceFeeAmount;
+                  serviceFeeBreakdown.aboveThresholdCount++;
+                } else if (tier === 'below') {
+                  serviceFeeBreakdown.belowThresholdFees += serviceFeeAmount;
+                  serviceFeeBreakdown.belowThresholdCount++;
+                }
+              }
             }
           });
           
@@ -112,7 +161,8 @@ export default function AdminPayouts() {
           unpaidBookingCount: unpaidBookingIds.length,
           addedAt: methodData.addedAt || new Date().toISOString(),
           type: methodData.type || 'gcash',
-          verifiedAt: methodData.verifiedAt || null
+          verifiedAt: methodData.verifiedAt || null,
+          serviceFeeBreakdown: serviceFeeBreakdown
         });
       }
 
@@ -251,7 +301,8 @@ export default function AdminPayouts() {
         createdAt: payoutTimestamp,
         processedBy: 'admin',
         bookingIds: bookingIdsToUpdate,
-        bookingCount: bookingIdsToUpdate.length
+        bookingCount: bookingIdsToUpdate.length,
+        serviceFeeBreakdown: selectedMethod.serviceFeeBreakdown
       };
 
       batch.set(payoutRef, transaction);
@@ -294,6 +345,10 @@ export default function AdminPayouts() {
     .filter(r => r.verified && r.earnings > 0)
     .reduce((sum, r) => sum + (r.earnings || 0), 0);
 
+  const totalServiceFeesCollected = payoutRequests
+    .filter(r => r.verified && r.earnings > 0)
+    .reduce((sum, r) => sum + (r.serviceFeeBreakdown?.totalServiceFees || 0), 0);
+
   if (loading) {
     return (
       <div className="flex justify-center items-center py-12">
@@ -308,7 +363,7 @@ export default function AdminPayouts() {
       <div className="flex justify-between items-center">
         <div>
           <h1 className="text-3xl font-bold text-gray-900">Payout Management</h1>
-          <p className="text-gray-600 mt-1">Manage host payouts and verify GCash accounts</p>
+          <p className="text-gray-600 mt-1">Manage host payouts with tiered service fee system</p>
         </div>
         <div className="flex gap-2">
           <button className="flex items-center gap-2 bg-gray-100 hover:bg-gray-200 text-gray-700 px-4 py-2 rounded-lg transition">
@@ -317,6 +372,28 @@ export default function AdminPayouts() {
           </button>
         </div>
       </div>
+
+      {/* Service Fee Info Banner */}
+      {platformSettings && (
+        <div className="bg-gradient-to-r from-purple-50 to-blue-50 border border-purple-200 rounded-lg p-4">
+          <div className="flex items-start gap-3">
+            <Info className="w-5 h-5 text-purple-600 flex-shrink-0 mt-0.5" />
+            <div className="flex-1">
+              <p className="font-semibold text-gray-900 mb-1">Current Tiered Service Fee Structure</p>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-2 text-sm text-gray-700">
+                <div className="flex items-center gap-2">
+                  <span className="bg-green-100 text-green-700 px-2 py-0.5 rounded text-xs font-semibold">LOWER TIER</span>
+                  <span>Below ₱{platformSettings.serviceFeeThreshold?.toLocaleString()}: <strong>{platformSettings.serviceFeeBelowThreshold}%</strong></span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <span className="bg-blue-100 text-blue-700 px-2 py-0.5 rounded text-xs font-semibold">HIGHER TIER</span>
+                  <span>Above ₱{platformSettings.serviceFeeThreshold?.toLocaleString()}: <strong>{platformSettings.serviceFeeAboveThreshold}%</strong></span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Stats Cards */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
@@ -351,6 +428,7 @@ export default function AdminPayouts() {
               <p className="text-3xl font-bold text-gray-900 mt-2">
                 ₱{Math.max(0, totalPendingPayouts).toLocaleString()}
               </p>
+              <p className="text-xs text-gray-500 mt-1">To hosts</p>
             </div>
             <CreditCard className="w-8 h-8 text-green-600" />
           </div>
@@ -359,14 +437,11 @@ export default function AdminPayouts() {
         <div className="bg-white rounded-lg shadow p-6">
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-gray-600 text-sm">Paid This Month</p>
+              <p className="text-gray-600 text-sm">Service Fees Collected</p>
               <p className="text-3xl font-bold text-gray-900 mt-2">
-                {payoutHistory.filter(p => {
-                  const date = new Date(p.createdAt);
-                  const now = new Date();
-                  return date.getMonth() === now.getMonth() && date.getFullYear() === now.getFullYear();
-                }).length}
+                ₱{Math.max(0, totalServiceFeesCollected).toLocaleString()}
               </p>
+              <p className="text-xs text-gray-500 mt-1">From pending payouts</p>
             </div>
             <CheckCircle className="w-8 h-8 text-purple-600" />
           </div>
@@ -416,8 +491,9 @@ export default function AdminPayouts() {
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-600 uppercase">Host</th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-600 uppercase">GCash Account</th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-600 uppercase">Mobile Number</th>
-                <th className="px-6 py-3 text-center text-xs font-medium text-gray-600 uppercase">Unpaid Bookings</th>
-                <th className="px-6 py-3 text-right text-xs font-medium text-gray-600 uppercase">Amount to Pay</th>
+                <th className="px-6 py-3 text-center text-xs font-medium text-gray-600 uppercase">Bookings</th>
+                <th className="px-6 py-3 text-right text-xs font-medium text-gray-600 uppercase">Host Earnings</th>
+                <th className="px-6 py-3 text-right text-xs font-medium text-gray-600 uppercase">Service Fee</th>
                 <th className="px-6 py-3 text-center text-xs font-medium text-gray-600 uppercase">Status</th>
                 <th className="px-6 py-3 text-center text-xs font-medium text-gray-600 uppercase">Actions</th>
               </tr>
@@ -425,7 +501,7 @@ export default function AdminPayouts() {
             <tbody className="divide-y divide-gray-200">
               {payoutRequests.length === 0 ? (
                 <tr>
-                  <td colSpan="7" className="px-6 py-12 text-center">
+                  <td colSpan="8" className="px-6 py-12 text-center">
                     <CreditCard className="w-12 h-12 text-gray-400 mx-auto mb-3" />
                     <p className="text-gray-600">No payout requests found</p>
                   </td>
@@ -448,13 +524,40 @@ export default function AdminPayouts() {
                       <p className="text-gray-900">{request.mobileNumber}</p>
                     </td>
                     <td className="px-6 py-4 text-center">
-                      <span className="inline-flex items-center justify-center w-8 h-8 bg-blue-100 text-blue-700 rounded-full font-semibold text-sm">
-                        {request.unpaidBookingCount || 0}
-                      </span>
+                      <div className="space-y-1">
+                        <span className="inline-flex items-center justify-center w-8 h-8 bg-blue-100 text-blue-700 rounded-full font-semibold text-sm">
+                          {request.unpaidBookingCount || 0}
+                        </span>
+                        {request.serviceFeeBreakdown && (request.serviceFeeBreakdown.aboveThresholdCount > 0 || request.serviceFeeBreakdown.belowThresholdCount > 0) && (
+                          <div className="text-xs text-gray-500">
+                            <div className="flex items-center justify-center gap-1">
+                              {request.serviceFeeBreakdown.belowThresholdCount > 0 && (
+                                <span className="bg-green-100 text-green-700 px-1.5 py-0.5 rounded">{request.serviceFeeBreakdown.belowThresholdCount}L</span>
+                              )}
+                              {request.serviceFeeBreakdown.aboveThresholdCount > 0 && (
+                                <span className="bg-blue-100 text-blue-700 px-1.5 py-0.5 rounded">{request.serviceFeeBreakdown.aboveThresholdCount}H</span>
+                              )}
+                            </div>
+                          </div>
+                        )}
+                      </div>
                     </td>
                     <td className="px-6 py-4 text-right">
                       <p className="font-bold text-gray-900">₱{(request.earnings || 0).toLocaleString()}</p>
-                      <p className="text-xs text-gray-500">Host earnings after fees</p>
+                      <p className="text-xs text-gray-500">After fees</p>
+                    </td>
+                    <td className="px-6 py-4 text-right">
+                      <p className="font-semibold text-purple-600">₱{(request.serviceFeeBreakdown?.totalServiceFees || 0).toLocaleString()}</p>
+                      {request.serviceFeeBreakdown && (request.serviceFeeBreakdown.aboveThresholdFees > 0 || request.serviceFeeBreakdown.belowThresholdFees > 0) && (
+                        <div className="text-xs text-gray-500 space-y-0.5 mt-1">
+                          {request.serviceFeeBreakdown.belowThresholdFees > 0 && (
+                            <div>L: ₱{request.serviceFeeBreakdown.belowThresholdFees.toFixed(0)}</div>
+                          )}
+                          {request.serviceFeeBreakdown.aboveThresholdFees > 0 && (
+                            <div>H: ₱{request.serviceFeeBreakdown.aboveThresholdFees.toFixed(0)}</div>
+                          )}
+                        </div>
+                      )}
                     </td>
                     <td className="px-6 py-4 text-center">
                       <span className={`inline-flex items-center gap-1 px-3 py-1 rounded-full text-xs font-semibold ${getStatusColor(request.verified)}`}>
@@ -541,7 +644,7 @@ export default function AdminPayouts() {
       {/* Payout Modal */}
       {showPayoutModal && selectedMethod && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-lg shadow-lg max-w-md w-full p-6">
+          <div className="bg-white rounded-lg shadow-lg max-w-md w-full p-6 max-h-[90vh] overflow-y-auto">
             <h3 className="text-xl font-bold text-gray-900 mb-4">Process Payout</h3>
 
             <div className="space-y-4 mb-6">
@@ -553,6 +656,31 @@ export default function AdminPayouts() {
                   <strong>Unpaid Bookings:</strong> {selectedMethod.unpaidBookingCount || 0}
                 </p>
               </div>
+
+              {/* Service Fee Breakdown */}
+              {selectedMethod.serviceFeeBreakdown && (
+                <div className="bg-purple-50 border border-purple-200 rounded-lg p-3">
+                  <p className="text-sm font-semibold text-purple-900 mb-2">Service Fee Breakdown:</p>
+                  <div className="space-y-1 text-xs text-purple-800">
+                    {selectedMethod.serviceFeeBreakdown.belowThresholdCount > 0 && (
+                      <div className="flex justify-between">
+                        <span>Lower Tier ({selectedMethod.serviceFeeBreakdown.belowThresholdCount} bookings):</span>
+                        <span className="font-semibold">₱{selectedMethod.serviceFeeBreakdown.belowThresholdFees.toFixed(2)}</span>
+                      </div>
+                    )}
+                    {selectedMethod.serviceFeeBreakdown.aboveThresholdCount > 0 && (
+                      <div className="flex justify-between">
+                        <span>Higher Tier ({selectedMethod.serviceFeeBreakdown.aboveThresholdCount} bookings):</span>
+                        <span className="font-semibold">₱{selectedMethod.serviceFeeBreakdown.aboveThresholdFees.toFixed(2)}</span>
+                      </div>
+                    )}
+                    <div className="flex justify-between border-t border-purple-300 pt-1 mt-1">
+                      <span className="font-semibold">Total Service Fees:</span>
+                      <span className="font-bold">₱{selectedMethod.serviceFeeBreakdown.totalServiceFees.toFixed(2)}</span>
+                    </div>
+                  </div>
+                </div>
+              )}
 
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">
@@ -588,7 +716,7 @@ export default function AdminPayouts() {
                   onChange={(e) => setPayoutForm(prev => ({ ...prev, amount: e.target.value }))}
                   className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
                 />
-                <p className="text-xs text-gray-600 mt-1">Host earnings after 5% service fee deduction</p>
+                <p className="text-xs text-gray-600 mt-1">Host earnings after tiered service fee deduction</p>
               </div>
 
               <div>
@@ -652,7 +780,7 @@ export default function AdminPayouts() {
       {/* Details Modal */}
       {showDetailsModal && selectedForDetails && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-lg shadow-lg max-w-md w-full p-6">
+          <div className="bg-white rounded-lg shadow-lg max-w-md w-full p-6 max-h-[90vh] overflow-y-auto">
             <h3 className="text-xl font-bold text-gray-900 mb-4">Account Details</h3>
 
             <div className="space-y-4 mb-6">
@@ -678,14 +806,53 @@ export default function AdminPayouts() {
                 <p className="text-lg font-semibold text-gray-900">
                   {selectedForDetails?.unpaidBookingCount || 0}
                 </p>
+                {selectedForDetails?.serviceFeeBreakdown && (
+                  <div className="flex gap-2 mt-1">
+                    {selectedForDetails.serviceFeeBreakdown.belowThresholdCount > 0 && (
+                      <span className="text-xs bg-green-100 text-green-700 px-2 py-1 rounded">
+                        {selectedForDetails.serviceFeeBreakdown.belowThresholdCount} Lower Tier
+                      </span>
+                    )}
+                    {selectedForDetails.serviceFeeBreakdown.aboveThresholdCount > 0 && (
+                      <span className="text-xs bg-blue-100 text-blue-700 px-2 py-1 rounded">
+                        {selectedForDetails.serviceFeeBreakdown.aboveThresholdCount} Higher Tier
+                      </span>
+                    )}
+                  </div>
+                )}
               </div>
+
+              {/* Service Fee Breakdown in Details */}
+              {selectedForDetails?.serviceFeeBreakdown && (
+                <div className="bg-purple-50 border border-purple-200 rounded-lg p-3">
+                  <p className="text-xs font-medium text-gray-600 uppercase mb-2">Service Fee Breakdown</p>
+                  <div className="space-y-2 text-sm">
+                    {selectedForDetails.serviceFeeBreakdown.belowThresholdCount > 0 && (
+                      <div className="flex justify-between">
+                        <span className="text-gray-700">Lower Tier ({selectedForDetails.serviceFeeBreakdown.belowThresholdCount}):</span>
+                        <span className="font-semibold text-gray-900">₱{selectedForDetails.serviceFeeBreakdown.belowThresholdFees.toFixed(2)}</span>
+                      </div>
+                    )}
+                    {selectedForDetails.serviceFeeBreakdown.aboveThresholdCount > 0 && (
+                      <div className="flex justify-between">
+                        <span className="text-gray-700">Higher Tier ({selectedForDetails.serviceFeeBreakdown.aboveThresholdCount}):</span>
+                        <span className="font-semibold text-gray-900">₱{selectedForDetails.serviceFeeBreakdown.aboveThresholdFees.toFixed(2)}</span>
+                      </div>
+                    )}
+                    <div className="flex justify-between border-t border-purple-300 pt-2">
+                      <span className="font-semibold text-purple-900">Total Service Fees:</span>
+                      <span className="font-bold text-purple-900">₱{selectedForDetails.serviceFeeBreakdown.totalServiceFees.toFixed(2)}</span>
+                    </div>
+                  </div>
+                </div>
+              )}
 
               <div>
                 <p className="text-xs font-medium text-gray-600 uppercase">Amount to Pay (Host Earnings)</p>
                 <p className="text-2xl font-bold text-green-600">
                   ₱{(selectedForDetails?.earnings || 0).toLocaleString()}
                 </p>
-                <p className="text-xs text-gray-500 mt-1">After 5% service fee deduction</p>
+                <p className="text-xs text-gray-500 mt-1">After tiered service fee deduction</p>
               </div>
 
               <div>
