@@ -81,7 +81,7 @@ const VehiclesTab = ({
           >
             <div className="relative h-48">
               <img
-                src={v.images?.[0] || 'https://via.placeholder.com/400x300?text=No+Image'}
+                src={v.imageUrls?.[0] || 'https://via.placeholder.com/400x300?text=No+Image'}
                 alt={v.title || `${v.specifications?.brand} ${v.specifications?.model}`}
                 className="w-full h-full object-cover"
               />

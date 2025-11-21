@@ -4,7 +4,7 @@ import { useNavigate } from 'react-router-dom';
 import { Save, AlertCircle, Loader2, MapPin, Search } from 'lucide-react';
 import ImageUploader from '../components/ImageUploader';
 import { auth } from '../firebase/firebase';
-import { addVehicle, formatVehicleData } from '../utils/vehicleService';
+import { addVehicle, formatVehicleData } from '../../api/vehicleService';
 import SuccessModal from '../components/reusables/SuccessModal';
 
 const AddCar = ({ onSuccess }) => {
@@ -247,9 +247,14 @@ const AddCar = ({ onSuccess }) => {
       }
     }));
   };
-
+  
   const handleImagesChange = (newImages) => {
-    setImages(newImages);
+  console.log('Images received:', newImages);
+    
+  const files = newImages
+    .map((img) => img.file)  
+    .filter(Boolean);     
+  setImages(files);
   };
 
   const validateForm = () => {

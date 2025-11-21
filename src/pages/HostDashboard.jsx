@@ -5,9 +5,9 @@ import { useAuth } from '../context/Authcontext';
 import { DollarSign, Calendar, Car, TrendingUp } from 'lucide-react';
 import { db } from '../firebase/firebase';
 import { collection, query, where, getDocs, deleteDoc, doc, updateDoc } from 'firebase/firestore';
-import { deleteVehicleImages } from '../utils/vehicleService';
 import { getHostBookings } from '../utils/bookingService';
 import { createOrGetChat } from '../utils/chatService';
+import { deleteVehicle, getHostVehicles } from '../../api/vehicleService';
 
 // Import components
 import StatsCard from "../pages/hostdashboard/StatsCard";
@@ -50,15 +50,11 @@ const HostDashboard = () => {
 
       try {
         setLoading(true);
-        const q = query(collection(db, 'vehicles'), where('hostId', '==', user.userId));
-        const snapshot = await getDocs(q);
-        const fetchedVehicles = snapshot.docs.map(doc => ({
-          id: doc.id,
-          ...doc.data(),
-        }));
-        setVehicles(fetchedVehicles);
+        const vehicles = await getHostVehicles()
+        setVehicles(vehicles)
       } catch (error) {
         console.error('Error fetching vehicles:', error);
+        setVehicles([]);
       } finally {
         setLoading(false);
       }
@@ -79,11 +75,11 @@ const HostDashboard = () => {
 
       try {
         setBookingsLoading(true);
-        const hostBookings = await getHostBookings(user.userId);
+        const hostBookings = await getHostBookings();
         hostBookings.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
         setBookings(hostBookings);
       } catch (error) {
-        console.error('Error fetching bookings:', error);
+        console.error('Error fetching bookings:',error);
       } finally {
         setBookingsLoading(false);
       }
@@ -187,14 +183,11 @@ const HostDashboard = () => {
   ];
 
   // Delete vehicle handler
-  const handleDelete = async (id, imageUrls) => {
+  const handleDelete = async (id,imageUrls) => {
     if (window.confirm('Are you sure you want to delete this vehicle?')) {
       try {
-        if (imageUrls && imageUrls.length > 0) {
-          await deleteVehicleImages(imageUrls);
-        }
-        await deleteDoc(doc(db, 'vehicles', id));
-        setVehicles(prev => prev.filter(v => v.id !== id));
+        await deleteVehicle(id,imageUrls)
+        setVehicles(prev => prev.filter(v => v.id !== v.id));
       } catch (error) {
         console.error('Error deleting vehicle:', error);
         alert('Failed to delete vehicle. Please try again.');
